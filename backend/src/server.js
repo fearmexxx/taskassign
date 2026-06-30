@@ -152,6 +152,72 @@ app.get('/api/users', authenticateToken, (req, res) => {
   );
 });
 
+// Create User
+app.post('/api/users', authenticateToken, requireRole(['Admin']), (req, res) => {
+  const { name, email, password, role, department_id } = req.body;
+  if (!name || !email || !password || !role) {
+    return res.status(400).json({ error: 'Tên, email, mật khẩu và vai trò là bắt buộc' });
+  }
+
+  db.run(
+    `INSERT INTO users (name, email, password, role, department_id) VALUES (?, ?, ?, ?, ?)`,
+    [name, email, password, role, department_id || null],
+    function(err) {
+      if (err) {
+        if (err.message.includes('UNIQUE')) {
+          return res.status(400).json({ error: 'Email đã tồn tại trong hệ thống' });
+        }
+        return res.status(500).json({ error: err.message });
+      }
+      res.status(201).json({ id: this.lastID, name, email, role, department_id });
+    }
+  );
+});
+
+// Update User
+app.put('/api/users/:id', authenticateToken, requireRole(['Admin']), (req, res) => {
+  const { name, email, password, role, department_id } = req.body;
+  const userId = req.params.id;
+
+  db.get(`SELECT * FROM users WHERE id = ?`, [userId], (err, oldUser) => {
+    if (err) return res.status(500).json({ error: err.message });
+    if (!oldUser) return res.status(404).json({ error: 'Không tìm thấy người dùng' });
+
+    const updatedName = name !== undefined ? name : oldUser.name;
+    const updatedEmail = email !== undefined ? email : oldUser.email;
+    const updatedPassword = (password && password.trim() !== '') ? password : oldUser.password;
+    const updatedRole = role !== undefined ? role : oldUser.role;
+    const updatedDept = department_id !== undefined ? department_id : oldUser.department_id;
+
+    db.run(
+      `UPDATE users SET name = ?, email = ?, password = ?, role = ?, department_id = ? WHERE id = ?`,
+      [updatedName, updatedEmail, updatedPassword, updatedRole, updatedDept, userId],
+      function(err) {
+        if (err) {
+          if (err.message.includes('UNIQUE')) {
+            return res.status(400).json({ error: 'Email đã tồn tại trong hệ thống' });
+          }
+          return res.status(500).json({ error: err.message });
+        }
+        res.json({ message: 'Cập nhật nhân viên thành công' });
+      }
+    );
+  });
+});
+
+// Delete User
+app.delete('/api/users/:id', authenticateToken, requireRole(['Admin']), (req, res) => {
+  const userId = req.params.id;
+  if (parseInt(userId) === req.user.id) {
+    return res.status(400).json({ error: 'Không thể xóa chính tài khoản đang đăng nhập' });
+  }
+
+  db.run(`DELETE FROM users WHERE id = ?`, [userId], function(err) {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json({ message: 'Xóa nhân viên thành công' });
+  });
+});
+
 // --- DEPARTMENT MANAGEMENT ---
 app.get('/api/departments', authenticateToken, (req, res) => {
   db.all(
@@ -179,6 +245,35 @@ app.post('/api/departments', authenticateToken, requireRole(['Admin']), (req, re
       res.status(201).json({ id: this.lastID, name, description });
     }
   );
+});
+
+// Update department
+app.put('/api/departments/:id', authenticateToken, requireRole(['Admin']), (req, res) => {
+  const { name, description } = req.body;
+  const deptId = req.params.id;
+
+  db.run(
+    `UPDATE departments SET name = ?, description = ? WHERE id = ?`,
+    [name, description, deptId],
+    function(err) {
+      if (err) {
+        if (err.message.includes('UNIQUE')) {
+          return res.status(400).json({ error: 'Tên phòng ban đã tồn tại' });
+        }
+        return res.status(500).json({ error: err.message });
+      }
+      res.json({ message: 'Cập nhật phòng ban thành công' });
+    }
+  );
+});
+
+// Delete department
+app.delete('/api/departments/:id', authenticateToken, requireRole(['Admin']), (req, res) => {
+  const deptId = req.params.id;
+  db.run(`DELETE FROM departments WHERE id = ?`, [deptId], function(err) {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json({ message: 'Xóa phòng ban thành công' });
+  });
 });
 
 // --- PROJECT MANAGEMENT ---
@@ -268,6 +363,13 @@ app.put('/api/projects/:id', authenticateToken, async (req, res) => {
   const projectId = req.params.id;
 
   try {
+    const project = await dbGet(`SELECT * FROM projects WHERE id = ?`, [projectId]);
+    if (!project) return res.status(404).json({ error: 'Không tìm thấy dự án' });
+
+    if (req.user.role !== 'Admin' && project.owner_id !== req.user.id && project.sub_owner_id !== req.user.id) {
+      return res.status(403).json({ error: 'Bạn không có quyền chỉnh sửa thiết lập dự án này' });
+    }
+
     await dbRun(
       `UPDATE projects 
        SET name = COALESCE(?, name),
