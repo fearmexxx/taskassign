@@ -406,11 +406,23 @@ app.put('/api/projects/:id', authenticateToken, async (req, res) => {
 });
 
 // Delete project
-app.delete('/api/projects/:id', authenticateToken, requireRole(['Admin', 'Lead']), (req, res) => {
-  db.run(`DELETE FROM projects WHERE id = ?`, [req.params.id], function(err) {
-    if (err) return res.status(500).json({ error: err.message });
-    res.json({ message: 'Dự án đã được xóa thành công' });
-  });
+app.delete('/api/projects/:id', authenticateToken, requireRole(['Admin', 'Lead']), async (req, res) => {
+  const projectId = req.params.id;
+  try {
+    const project = await dbGet(`SELECT * FROM projects WHERE id = ?`, [projectId]);
+    if (!project) return res.status(404).json({ error: 'Không tìm thấy dự án' });
+
+    if (req.user.role !== 'Admin' && project.owner_id !== req.user.id && project.sub_owner_id !== req.user.id) {
+      return res.status(403).json({ error: 'Bạn không có quyền xóa dự án này' });
+    }
+
+    db.run(`DELETE FROM projects WHERE id = ?`, [projectId], function(err) {
+      if (err) return res.status(500).json({ error: err.message });
+      res.json({ message: 'Dự án đã được xóa thành công' });
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // --- TASK MANAGEMENT ---

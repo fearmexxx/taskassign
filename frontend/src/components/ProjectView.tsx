@@ -645,9 +645,11 @@ export const ProjectView: React.FC = () => {
       <div className="project-sidebar">
         <div className="sidebar-header">
           <h3 style={{ fontSize: 16, fontWeight: 700 }}>Dự Án Agency</h3>
-          <button className="btn-outline" style={{ padding: '6px 10px', display: 'flex', alignItems: 'center', gap: 4 }} onClick={() => setShowAddProject(true)}>
-            <Plus size={14} /> Dự án
-          </button>
+          {(user?.role === 'Admin' || user?.role === 'Lead') && (
+            <button className="btn-outline" style={{ padding: '6px 10px', display: 'flex', alignItems: 'center', gap: 4 }} onClick={() => setShowAddProject(true)}>
+              <Plus size={14} /> Dự án
+            </button>
+          )}
         </div>
 
         <div className="project-list">
@@ -704,9 +706,11 @@ export const ProjectView: React.FC = () => {
               </div>
 
               <div style={{ display: 'flex', gap: 12 }}>
-                <button className="btn-outline" style={{ padding: '8px 16px', display: 'flex', alignItems: 'center', gap: 6 }} onClick={() => openEditProjectModal(activeProject)}>
-                  <Settings size={16} /> Thiết lập
-                </button>
+                {(user?.role === 'Admin' || activeProject.owner_id === user?.id || activeProject.sub_owner_id === user?.id) && (
+                  <button className="btn-outline" style={{ padding: '8px 16px', display: 'flex', alignItems: 'center', gap: 6 }} onClick={() => openEditProjectModal(activeProject)}>
+                    <Settings size={16} /> Thiết lập
+                  </button>
+                )}
                 <button className="btn-neon" style={{ padding: '8px 16px', display: 'flex', alignItems: 'center', gap: 6 }} onClick={() => setShowAddTask(true)}>
                   <Plus size={16} /> Tạo Công Việc
                 </button>
