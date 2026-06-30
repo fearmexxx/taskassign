@@ -1,0 +1,120 @@
+:root {
+  --bg-dark: #f9f9fb;
+  --bg-card: #ffffff;
+  --bg-sidebar: #1e1f21; /* Asana typical dark sidebar */
+  --bg-header: #ffffff;
+  --border-color: #e8ecef;
+  
+  --accent-cyan: #20a0ff;
+  --accent-purple: #9b51e0;
+  --accent-pink: #f06292;
+  --accent-orange: #e0533c;
+  --accent-green: #27ae60;
+  
+  --text-primary: #151b26; /* Deep black/navy for readability */
+  --text-secondary: #5f6b7c; /* Charcoal grey */
+  --text-muted: #8c9ba5; /* Light grey */
+  
+  --glass-shadow: 0 1px 3px rgba(0, 0, 0, 0.05), 0 4px 12px rgba(0, 0, 0, 0.03);
+  --transition-smooth: all 0.2s ease;
+  --font-family: 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background-color: var(--bg-dark);
+  color: var(--text-primary);
+  font-family: var(--font-family);
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Custom Scrollbars */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--bg-dark);
+}
+
+::-webkit-scrollbar-thumb {
+  background: #cfd8dc;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
+}
+
+/* Main Layout Structure */
+.app-container {
+  display: flex;
+  height: 100vh;
+  width: 100vw;
+  overflow: hidden;
+}
+
+/* Panel helper (Light Clean style) */
+.glass-panel {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  box-shadow: var(--glass-shadow);
+}
+
+.glow-cyan:hover {
+  box-shadow: 0 0 10px rgba(32, 160, 255, 0.15);
+}
+
+/* Clean buttons */
+.btn-neon {
+  background: #4f46e5; /* Asana Indigo accent */
+  color: #ffffff;
+  border: none;
+  font-family: var(--font-family);
+  font-weight: 500;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: var(--transition-smooth);
+}
+
+.btn-neon:hover {
+  background: #4338ca;
+  box-shadow: 0 2px 6px rgba(79, 70, 229, 0.3);
+}
+
+.btn-neon:active {
+  transform: translateY(0);
+}
+
+.btn-outline {
+  background: transparent;
+  color: var(--text-primary);
+  border: 1px solid #d0d5dd;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: var(--transition-smooth);
+  font-weight: 500;
+}
+
+.btn-outline:hover {
+  background: #f8f9fa;
+  border-color: var(--text-muted);
+}
+
+/* Animation Utilities */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(5px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.2s forwards ease-out;
+}
