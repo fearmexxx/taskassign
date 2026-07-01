@@ -39,6 +39,11 @@ This log tracks the build history, feature additions, styling changes, and deplo
   - Implemented request logging middleware showing incoming request data, payloads (with passwords masked), status, and response time.
   - Implemented automatic file logging to `backend/errors.log` on error responses ($\ge 500$) for production rollout diagnostics.
 
+### Phase 5: Admin Control & Vercel Integration
+- **CRUD Administration**: Integrated complete administrative capabilities in the backend and frontend. Admins can create, edit, and delete **Users** and **Departments** via the "Phòng ban & Nhân sự" settings dashboard.
+- **Permission Hardening**: Enforced authorization boundaries so Admins bypass restrictions on editing or deleting all project profiles, while Leads are restricted to their own projects.
+- **Vercel Routing Rewrite**: Created and synced [frontend/vercel.json](file:///Users/maxx/2026/bronew/bronew/taskassign-pro/frontend/vercel.json) pointing to the production Render backend service domain.
+
 ---
 
 ## 🚀 Deployment Plan (Vercel + Neon + Render)
