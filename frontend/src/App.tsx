@@ -7,6 +7,7 @@ import { ProjectView } from './components/ProjectView';
 import { CalendarView } from './components/CalendarView';
 import { DepartmentManager } from './components/DepartmentManager';
 import { WorkReports } from './components/WorkReports';
+import { SalaryManager } from './components/SalaryManager';
 
 const AppContent: React.FC = () => {
   const { user, token, isLoading } = useAuth();
@@ -48,6 +49,8 @@ const AppContent: React.FC = () => {
         return <DepartmentManager />;
       case 'reports':
         return <WorkReports />;
+      case 'salary':
+        return <SalaryManager />;
       default:
         return <Dashboard onCheckInChange={setIsCheckedIn} setActiveTab={setActiveTab} />;
     }

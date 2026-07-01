@@ -142,7 +142,7 @@ app.get('/api/auth/me', authenticateToken, (req, res) => {
 // --- USER MANAGEMENT ---
 app.get('/api/users', authenticateToken, (req, res) => {
   db.all(
-    `SELECT u.id, u.name, u.email, u.role, u.department_id, d.name as department_name 
+    `SELECT u.id, u.name, u.email, u.role, u.department_id, u.base_salary, d.name as department_name 
      FROM users u 
      LEFT JOIN departments d ON u.department_id = d.id`,
     (err, rows) => {
@@ -154,14 +154,14 @@ app.get('/api/users', authenticateToken, (req, res) => {
 
 // Create User
 app.post('/api/users', authenticateToken, requireRole(['Admin']), (req, res) => {
-  const { name, email, password, role, department_id } = req.body;
+  const { name, email, password, role, department_id, base_salary } = req.body;
   if (!name || !email || !password || !role) {
     return res.status(400).json({ error: 'Tên, email, mật khẩu và vai trò là bắt buộc' });
   }
 
   db.run(
-    `INSERT INTO users (name, email, password, role, department_id) VALUES (?, ?, ?, ?, ?)`,
-    [name, email, password, role, department_id || null],
+    `INSERT INTO users (name, email, password, role, department_id, base_salary) VALUES (?, ?, ?, ?, ?, ?)`,
+    [name, email, password, role, department_id || null, base_salary || 15000000],
     function(err) {
       if (err) {
         if (err.message.includes('UNIQUE')) {
@@ -169,14 +169,14 @@ app.post('/api/users', authenticateToken, requireRole(['Admin']), (req, res) => 
         }
         return res.status(500).json({ error: err.message });
       }
-      res.status(201).json({ id: this.lastID, name, email, role, department_id });
+      res.status(201).json({ id: this.lastID, name, email, role, department_id, base_salary: base_salary || 15000000 });
     }
   );
 });
 
 // Update User
 app.put('/api/users/:id', authenticateToken, requireRole(['Admin']), (req, res) => {
-  const { name, email, password, role, department_id } = req.body;
+  const { name, email, password, role, department_id, base_salary } = req.body;
   const userId = req.params.id;
 
   db.get(`SELECT * FROM users WHERE id = ?`, [userId], (err, oldUser) => {
@@ -188,10 +188,11 @@ app.put('/api/users/:id', authenticateToken, requireRole(['Admin']), (req, res) 
     const updatedPassword = (password && password.trim() !== '') ? password : oldUser.password;
     const updatedRole = role !== undefined ? role : oldUser.role;
     const updatedDept = department_id !== undefined ? department_id : oldUser.department_id;
+    const updatedSalary = base_salary !== undefined ? base_salary : oldUser.base_salary;
 
     db.run(
-      `UPDATE users SET name = ?, email = ?, password = ?, role = ?, department_id = ? WHERE id = ?`,
-      [updatedName, updatedEmail, updatedPassword, updatedRole, updatedDept, userId],
+      `UPDATE users SET name = ?, email = ?, password = ?, role = ?, department_id = ?, base_salary = ? WHERE id = ?`,
+      [updatedName, updatedEmail, updatedPassword, updatedRole, updatedDept, updatedSalary, userId],
       function(err) {
         if (err) {
           if (err.message.includes('UNIQUE')) {
@@ -612,8 +613,8 @@ app.post('/api/attendance/checkin', authenticateToken, (req, res) => {
   const now = new Date();
   const timeString = now.toTimeString().split(' ')[0]; // HH:MM:SS
   
-  // Decide status (Late if check-in is after 09:00 AM)
-  const isLate = now.getHours() > 9 || (now.getHours() === 9 && now.getMinutes() > 0);
+  // Decide status (Late if check-in is after 09:30 AM)
+  const isLate = now.getHours() > 9 || (now.getHours() === 9 && now.getMinutes() > 30);
   const status = isLate ? 'Late' : 'Present';
 
   db.run(
@@ -694,6 +695,104 @@ app.get('/api/attendance/admin-logs', authenticateToken, requireRole(['Admin', '
       res.json(rows);
     }
   );
+});
+
+// GET /api/attendance/salary-report
+app.get('/api/attendance/salary-report', authenticateToken, async (req, res) => {
+  const month = req.query.month || new Date().toISOString().slice(0, 7); // YYYY-MM
+  
+  try {
+    let usersQuery = `
+      SELECT u.id, u.name, u.email, u.role, u.department_id, u.base_salary, d.name as department_name 
+      FROM users u
+      LEFT JOIN departments d ON u.department_id = d.id
+    `;
+    const queryParams = [];
+
+    if (req.user.role === 'Member') {
+      usersQuery += ` WHERE u.id = ?`;
+      queryParams.push(req.user.id);
+    } else if (req.user.role === 'Lead') {
+      usersQuery += ` WHERE u.department_id = ? OR u.id = ?`;
+      queryParams.push(req.user.department_id, req.user.id);
+    }
+
+    const users = await dbAll(usersQuery, queryParams);
+
+    const userIds = users.map(u => u.id);
+    if (userIds.length === 0) {
+      return res.json([]);
+    }
+
+    const placeholders = userIds.map(() => '?').join(',');
+    const attendanceLogs = await dbAll(
+      `SELECT * FROM attendance 
+       WHERE user_id IN (${placeholders}) AND date LIKE ?`,
+      [...userIds, `${month}-%`]
+    );
+
+    const parseTime = (timeStr) => {
+      if (!timeStr) return null;
+      const parts = timeStr.split(':').map(Number);
+      if (parts.length < 2) return null;
+      const h = parts[0];
+      const m = parts[1];
+      const s = parts[2] || 0;
+      return h + m / 60 + s / 3600;
+    };
+
+    const report = users.map(u => {
+      const logs = attendanceLogs.filter(log => log.user_id === u.id);
+      
+      let presentDays = 0;
+      let lateDays = 0;
+      let totalHoursWorked = 0;
+      let calculatedSalary = 0;
+      const dailyRate = u.base_salary / 23.0;
+
+      logs.forEach(log => {
+        if (log.status !== 'Absent') {
+          presentDays++;
+          if (log.status === 'Late') {
+            lateDays++;
+          }
+
+          const checkInHour = parseTime(log.check_in);
+          const checkOutHour = parseTime(log.check_out);
+
+          if (checkInHour !== null && checkOutHour !== null && checkOutHour > checkInHour) {
+            const effectiveStart = Math.max(checkInHour, 9.5);
+            const effectiveEnd = Math.min(checkOutHour, 18.5);
+            const dailyHours = Math.max(0, effectiveEnd - effectiveStart);
+            
+            totalHoursWorked += dailyHours;
+            calculatedSalary += (dailyHours / 9.0) * dailyRate;
+          }
+        }
+      });
+
+      const absentDays = Math.max(0, 23 - presentDays);
+
+      return {
+        user_id: u.id,
+        name: u.name,
+        email: u.email,
+        role: u.role,
+        department_name: u.department_name || 'Chưa phân bổ',
+        base_salary: u.base_salary,
+        target_days: 23,
+        present_days: presentDays,
+        late_days: lateDays,
+        absent_days: absentDays,
+        hours_worked: Math.round(totalHoursWorked * 100) / 100,
+        calculated_salary: Math.round(calculatedSalary)
+      };
+    });
+
+    res.json(report);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // --- WORK REPORTS (BÁO CÁO CÔNG VIỆC) ---

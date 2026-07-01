@@ -16,6 +16,7 @@ interface User {
   role: 'Admin' | 'Lead' | 'Member';
   department_id: number | null;
   department_name?: string;
+  base_salary?: number;
 }
 
 export const DepartmentManager: React.FC = () => {
@@ -38,6 +39,7 @@ export const DepartmentManager: React.FC = () => {
   const [userPassword, setUserPassword] = useState('');
   const [userRole, setUserRole] = useState<'Admin' | 'Lead' | 'Member'>('Member');
   const [userDeptId, setUserDeptId] = useState<string>('');
+  const [userSalary, setUserSalary] = useState('15000000');
 
   const loadData = async () => {
     try {
@@ -138,7 +140,8 @@ export const DepartmentManager: React.FC = () => {
       email: userEmail,
       password: userPassword,
       role: userRole,
-      department_id: userDeptId === '' ? null : parseInt(userDeptId)
+      department_id: userDeptId === '' ? null : parseInt(userDeptId),
+      base_salary: parseInt(userSalary) || 15000000
     };
 
     try {
@@ -198,6 +201,7 @@ export const DepartmentManager: React.FC = () => {
     setUserPassword('');
     setUserRole('Member');
     setUserDeptId('');
+    setUserSalary('15000000');
     setShowUserModal(true);
   };
 
@@ -208,12 +212,14 @@ export const DepartmentManager: React.FC = () => {
     setUserPassword('');
     setUserRole(u.role);
     setUserDeptId(u.department_id ? u.department_id.toString() : '');
+    setUserSalary(u.base_salary ? u.base_salary.toString() : '15000000');
     setShowUserModal(true);
   };
 
   const closeUserModal = () => {
     setShowUserModal(false);
     setEditingUser(null);
+    setUserSalary('15000000');
   };
 
   const translateRole = (role: string) => {
@@ -564,6 +570,10 @@ export const DepartmentManager: React.FC = () => {
                     <option key={d.id} value={d.id}>{translateDept(d.name)}</option>
                   ))}
                 </select>
+              </div>
+              <div className="form-group">
+                <label>Lương cơ bản (VND)</label>
+                <input required type="number" placeholder="15000000" value={userSalary} onChange={e => setUserSalary(e.target.value)} />
               </div>
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, marginTop: 24 }}>
                 <button type="button" className="btn-outline" style={{ padding: '8px 16px' }} onClick={closeUserModal}>Hủy</button>

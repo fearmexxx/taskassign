@@ -26,6 +26,7 @@ const initDatabase = () => {
           password TEXT NOT NULL,
           role TEXT CHECK(role IN ('Admin', 'Lead', 'Member')) NOT NULL,
           department_id INTEGER,
+          base_salary INTEGER DEFAULT 15000000,
           FOREIGN KEY (department_id) REFERENCES departments(id)
         )
       `);
@@ -109,6 +110,7 @@ const initDatabase = () => {
       `);
 
       // Alter columns safely if running on an existing DB
+      db.run(`ALTER TABLE users ADD COLUMN base_salary INTEGER DEFAULT 15000000`, (err) => {});
       db.run(`ALTER TABLE projects ADD COLUMN owner_id INTEGER`, (err) => {});
       db.run(`ALTER TABLE projects ADD COLUMN sub_owner_id INTEGER`, (err) => {});
       db.run(`ALTER TABLE tasks ADD COLUMN owner_id INTEGER`, (err) => {});

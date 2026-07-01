@@ -7,7 +7,8 @@ import {
   Users2, 
   FileSpreadsheet, 
   LogOut, 
-  User 
+  User,
+  Wallet
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -247,6 +248,14 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, isChe
           >
             <FileSpreadsheet className="menu-item-icon" />
             <span>Báo cáo ngày</span>
+          </div>
+
+          <div 
+            className={`menu-item ${activeTab === 'salary' ? 'active' : ''}`}
+            onClick={() => setActiveTab('salary')}
+          >
+            <Wallet className="menu-item-icon" />
+            <span>Bảng công & Lương</span>
           </div>
         </nav>
       </div>

@@ -14,7 +14,8 @@ CREATE TABLE IF NOT EXISTS users (
     email VARCHAR(255) NOT NULL UNIQUE,
     password VARCHAR(255) NOT NULL,
     role VARCHAR(50) CHECK (role IN ('Admin', 'Lead', 'Member')) NOT NULL,
-    department_id INTEGER REFERENCES departments(id) ON DELETE SET NULL
+    department_id INTEGER REFERENCES departments(id) ON DELETE SET NULL,
+    base_salary INTEGER DEFAULT 15000000
 );
 
 -- 3. Projects Table
