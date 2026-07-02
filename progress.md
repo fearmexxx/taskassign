@@ -44,6 +44,16 @@ This log tracks the build history, feature additions, styling changes, and deplo
 - **Permission Hardening**: Enforced authorization boundaries so Admins bypass restrictions on editing or deleting all project profiles, while Leads are restricted to their own projects.
 - **Vercel Routing Rewrite**: Created and synced [frontend/vercel.json](file:///Users/maxx/2026/bronew/bronew/taskassign-pro/frontend/vercel.json) pointing to the production Render backend service domain.
 
+### Phase 6: Attendance, Salary & Permanent Persistence
+- **Attendance & Payroll**:
+  - Implemented 9:30 AM check-in lateness rules and calculated worked hours relative to the 9:30 AM - 6:30 PM (9.0h) standard shift.
+  - Calculated monthly salaries proportionally based on worked hours relative to a 23-day target.
+  - Added base salary attributes to user profiles, customizable via Admin CRUD controls.
+- **Permanent Cloud Storage**:
+  - Created a database wrapper in `database.js` to automatically bridge SQLite and PostgreSQL (using a `pg` pool when `DATABASE_URL` is set).
+  - Implemented dynamic SQL translation (transforming SQLite table commands and `?` query arguments into PostgreSQL `$1, $2, ...` syntax).
+  - Ensured all updates to users, departments, and project settings are stored permanently in the Neon cloud database.
+
 ---
 
 ## 🚀 Deployment Plan (Vercel + Neon + Render)
