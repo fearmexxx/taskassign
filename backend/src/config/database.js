@@ -42,8 +42,15 @@ if (isPostgres) {
       cb();
     },
     run: function(sql, params, callback) {
+      let realParams = params;
+      let realCallback = callback;
+      if (typeof params === 'function') {
+        realCallback = params;
+        realParams = [];
+      }
+
       const pgSql = translateSql(sql);
-      const args = Array.isArray(params) ? params : (params ? [params] : []);
+      const args = Array.isArray(realParams) ? realParams : (realParams ? [realParams] : []);
       
       // If it's an INSERT query and doesn't contain RETURNING, append RETURNING id to get lastID
       let finalSql = pgSql;
@@ -54,49 +61,63 @@ if (isPostgres) {
 
       pgPool.query(finalSql, args, (err, res) => {
         if (err) {
-          if (callback) callback(err);
+          if (realCallback) realCallback(err);
           return;
         }
-        if (callback) {
+        if (realCallback) {
           const lastID = (isInsert && res.rows && res.rows[0]) ? res.rows[0].id : null;
           const context = {
             lastID: lastID,
             changes: res.rowCount
           };
-          callback.call(context, null);
+          realCallback.call(context, null);
         }
       });
     },
     get: function(sql, params, callback) {
+      let realParams = params;
+      let realCallback = callback;
+      if (typeof params === 'function') {
+        realCallback = params;
+        realParams = [];
+      }
+
       const pgSql = translateSql(sql);
-      const args = Array.isArray(params) ? params : (params ? [params] : []);
+      const args = Array.isArray(realParams) ? realParams : (realParams ? [realParams] : []);
 
       pgPool.query(pgSql, args, (err, res) => {
         if (err) {
-          if (callback) callback(err);
+          if (realCallback) realCallback(err);
           return;
         }
-        if (callback) {
+        if (realCallback) {
           const row = (res.rows && res.rows[0]) ? res.rows[0] : null;
           // PostgreSQL returns count as a string, convert to number if present
           if (row && row.count !== undefined) {
             row.count = parseInt(row.count);
           }
-          callback(null, row);
+          realCallback(null, row);
         }
       });
     },
     all: function(sql, params, callback) {
+      let realParams = params;
+      let realCallback = callback;
+      if (typeof params === 'function') {
+        realCallback = params;
+        realParams = [];
+      }
+
       const pgSql = translateSql(sql);
-      const args = Array.isArray(params) ? params : (params ? [params] : []);
+      const args = Array.isArray(realParams) ? realParams : (realParams ? [realParams] : []);
 
       pgPool.query(pgSql, args, (err, res) => {
         if (err) {
-          if (callback) callback(err);
+          if (realCallback) realCallback(err);
           return;
         }
-        if (callback) {
-          callback(null, res.rows || []);
+        if (realCallback) {
+          realCallback(null, res.rows || []);
         }
       });
     },
