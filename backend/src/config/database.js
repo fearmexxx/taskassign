@@ -280,6 +280,14 @@ const initDatabase = () => {
         `)
       ])
       .then(() => {
+        return new Promise((res) => {
+          db.run(`ALTER TABLE users ADD COLUMN base_salary INTEGER DEFAULT 15000000`, (err) => {
+            // Ignore error if column already exists
+            res();
+          });
+        });
+      })
+      .then(() => {
         // Seed standard data if users are empty
         db.get("SELECT COUNT(*) as count FROM users", (err, row) => {
           if (err) {
