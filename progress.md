@@ -82,6 +82,19 @@ This log tracks the build history, feature additions, styling changes, and deplo
   - **Modal Chấm công GPS & Wi-Fi chuyên biệt**: Radar quét vệ tinh, hiển thị khoảng cách thời gian thực, nút xác nhận lớn dễ bấm.
   - Ẩn sidebar desktop trên màn hình điện thoại ($\le 768px$) để tối ưu 100% diện tích làm việc.
 
+### Phase 9: Kiểm Soát Chấm Công Ngoài Văn Phòng (Remote/WFH), Bắt Buộc Lý Do & Ghi Nhận Địa Chỉ GPS
+- **Phát hiện Ngoài Văn Phòng (> 200m)**:
+  - Khi nhân viên ở cách trụ sở 772 Sư Vạn Hạnh > 200m, hệ thống hiển thị cảnh báo rõ ràng khoảng cách (VD: 5.3km).
+  - Yêu cầu xác nhận: "Bạn có muốn tiếp tục chấm công với trạng thái Ngoài văn phòng không?".
+- **Bắt Buộc Nhập Lý Do (Lý do nhanh + Ghi chú chi tiết)**:
+  - 4 danh mục lý do chính: `Làm việc tại nhà (WFH)`, `Gặp khách hàng / Đối tác`, `Đi công tác / Onsite`, `Khác`.
+  - Ô nhập ghi chú lý do bắt buộc. Nếu để trống hệ thống sẽ chặn không cho chấm công.
+- **Tự Động Ghi Nhận Địa Chỉ Thực Tế (Reverse Geocoding)**:
+  - Sử dụng tọa độ GPS thực tế để phân giải thành địa chỉ đường phố cụ thể (số nhà, tên đường, phường, quận) và lưu vào hồ sơ chấm công của nhân viên.
+- **Flag Trạng Thái & Giám Sát Hành Vi Nhân Viên**:
+  - Tự động gắn cờ `check_in_location_type` (`Office` vs `Remote`).
+  - Danh sách "Điểm diện Đội ngũ VBE Hôm nay" và bảng chi tiết chấm công hiển thị huy hiệu tím `Ngoài VP (5.3km)` kèm lý do và địa chỉ để Admin/Quản lý giám sát 100% minh bạch.
+
 ---
 
 ## 🚀 Deployment Plan (Vercel + Neon + Render)

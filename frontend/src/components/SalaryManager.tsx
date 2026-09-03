@@ -214,16 +214,40 @@ export const SalaryManager: React.FC = () => {
                       <td>{log.check_out || '-'}</td>
                       <td><strong>{hours}h</strong> / 9h</td>
                       <td>
-                        <span style={{
-                          padding: '2px 8px',
-                          borderRadius: 12,
-                          fontSize: 11,
-                          fontWeight: 600,
-                          backgroundColor: log.status === 'Present' ? 'rgba(16, 185, 129, 0.1)' : 'rgba(245, 158, 11, 0.1)',
-                          color: log.status === 'Present' ? '#10b981' : '#f59e0b'
-                        }}>
-                          {log.status === 'Present' ? 'Đúng giờ' : 'Đi trễ'}
-                        </span>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                          <div style={{ display: 'flex', gap: 4 }}>
+                            <span style={{
+                              padding: '2px 8px',
+                              borderRadius: 12,
+                              fontSize: 11,
+                              fontWeight: 600,
+                              backgroundColor: log.status === 'Present' ? 'rgba(16, 185, 129, 0.1)' : 'rgba(245, 158, 11, 0.1)',
+                              color: log.status === 'Present' ? '#10b981' : '#f59e0b'
+                            }}>
+                              {log.status === 'Present' ? 'Đúng giờ' : 'Đi trễ'}
+                            </span>
+
+                            <span style={{
+                              padding: '2px 8px',
+                              borderRadius: 12,
+                              fontSize: 11,
+                              fontWeight: 600,
+                              backgroundColor: log.check_in_location_type === 'Remote' ? 'rgba(168, 85, 247, 0.12)' : 'rgba(16, 185, 129, 0.1)',
+                              color: log.check_in_location_type === 'Remote' ? '#7c3aed' : '#10b981'
+                            }}>
+                              {log.check_in_location_type === 'Remote' ? 'Ngoài VP' : 'Tại VP'}
+                            </span>
+                          </div>
+
+                          {log.check_in_location_type === 'Remote' && log.check_in_reason && (
+                            <span 
+                              style={{ fontSize: 10, color: '#7c3aed', maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} 
+                              title={`${log.check_in_reason}${log.check_in_address ? ` (${log.check_in_address})` : ''}`}
+                            >
+                              📍 {log.check_in_reason}
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td style={{ fontWeight: 600 }}>{formatVND(Math.round(dayPay))}</td>
                     </tr>

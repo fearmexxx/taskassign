@@ -649,7 +649,8 @@ app.get('/api/attendance/today-team', authenticateToken, async (req, res) => {
     const today = getVietnamTime().dateString;
     const usersWithAttendance = await dbAll(
       `SELECT u.id, u.name, u.email, u.role, d.name as department_name,
-              a.check_in, a.check_out, a.status as attendance_status
+              a.check_in, a.check_out, a.status as attendance_status,
+              a.check_in_distance, a.check_in_location_type, a.check_in_reason, a.check_in_address
        FROM users u
        LEFT JOIN departments d ON u.department_id = d.id
        LEFT JOIN attendance a ON u.id = a.user_id AND a.date = ?
@@ -751,13 +752,13 @@ app.put('/api/company/settings', authenticateToken, requireRole(['Admin']), (req
   });
 });
 
-// Check-in action (GPS & Wi-Fi Verification, Ca chuẩn: 9h30 - 18h30. Sau 9h30 tính là Late)
+// Check-in action (GPS Geofencing, Lý do ngoài VP, Ca chuẩn: 9h30 - 18h30)
 app.post('/api/attendance/checkin', authenticateToken, async (req, res) => {
   const vnTime = getVietnamTime();
   const today = vnTime.dateString;
   const timeString = vnTime.timeString;
   
-  const { latitude, longitude, wifi_name, device_info } = req.body;
+  const { latitude, longitude, reason, address, device_info } = req.body;
 
   try {
     // 1. Fetch office settings
@@ -772,7 +773,6 @@ app.post('/api/attendance/checkin', authenticateToken, async (req, res) => {
 
     let calculatedDistance = null;
     let isGpsValid = false;
-    let isWifiValid = false;
 
     // Check GPS
     if (latitude && longitude) {
@@ -782,28 +782,26 @@ app.post('/api/attendance/checkin', authenticateToken, async (req, res) => {
       isGpsValid = calculatedDistance <= settings.max_distance_meters;
     }
 
-    // Check Wi-Fi
-    if (wifi_name && typeof wifi_name === 'string') {
-      const cleanWifi = wifi_name.trim().toLowerCase();
-      const targetWifi = (settings.allowed_wifi_name || 'VBE Agency').toLowerCase();
-      isWifiValid = cleanWifi === targetWifi || cleanWifi.includes('vbe');
-    }
+    // Decide location type: Office vs Remote
+    let locationType = 'Office';
+    let checkInReason = reason ? reason.trim() : null;
 
-    // Validation rule: Must satisfy GPS (within radius) OR connected to Office Wi-Fi
-    const isLocationValid = isGpsValid || isWifiValid;
-
-    if (!isLocationValid) {
-      if (calculatedDistance !== null) {
+    if (!isGpsValid) {
+      locationType = 'Remote'; // Ngoài văn phòng (> 200m)
+      
+      // Bắt buộc phải có lý do nếu ở ngoài văn phòng
+      if (!checkInReason) {
         return res.status(400).json({
-          error: `Bạn đang ở cách trụ sở ${calculatedDistance}m (Vượt quá bán kính ${settings.max_distance_meters}m). Vui lòng có mặt tại trụ sở 772 EFG Sư Vạn Hạnh hoặc kết nối Wi-Fi '${settings.allowed_wifi_name}' để chấm công.`,
+          error: `Bạn đang ở cách văn phòng ${calculatedDistance || 'nhiều'}m (ngoài bán kính 200m). Vui lòng xác nhận và nhập lý do làm việc ngoài văn phòng (Làm việc tại nhà, Gặp khách hàng, Công tác...).`,
+          requires_reason: true,
           distance: calculatedDistance,
           max_distance: settings.max_distance_meters
         });
-      } else {
-        return res.status(400).json({
-          error: `Vui lòng bật quyền truy cập vị trí GPS trên trình duyệt hoặc xác nhận kết nối Wi-Fi '${settings.allowed_wifi_name}' để chấm công.`,
-          require_gps: true
-        });
+      }
+    } else {
+      locationType = 'Office'; // Có mặt tại văn phòng
+      if (!checkInReason) {
+        checkInReason = 'Tại văn phòng 772 Sư Vạn Hạnh';
       }
     }
 
@@ -812,14 +810,16 @@ app.post('/api/attendance/checkin', authenticateToken, async (req, res) => {
     const status = isLate ? 'Late' : 'Present';
 
     await dbRun(
-      `INSERT INTO attendance (user_id, date, check_in, status, check_in_lat, check_in_lng, check_in_distance, check_in_wifi, check_in_device) 
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `INSERT INTO attendance (user_id, date, check_in, status, check_in_lat, check_in_lng, check_in_distance, check_in_location_type, check_in_reason, check_in_address, check_in_device) 
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(user_id, date) DO UPDATE SET 
          check_in = COALESCE(attendance.check_in, excluded.check_in),
          check_in_lat = COALESCE(attendance.check_in_lat, excluded.check_in_lat),
          check_in_lng = COALESCE(attendance.check_in_lng, excluded.check_in_lng),
          check_in_distance = COALESCE(attendance.check_in_distance, excluded.check_in_distance),
-         check_in_wifi = COALESCE(attendance.check_in_wifi, excluded.check_in_wifi),
+         check_in_location_type = COALESCE(attendance.check_in_location_type, excluded.check_in_location_type),
+         check_in_reason = COALESCE(attendance.check_in_reason, excluded.check_in_reason),
+         check_in_address = COALESCE(attendance.check_in_address, excluded.check_in_address),
          check_in_device = COALESCE(attendance.check_in_device, excluded.check_in_device)`,
       [
         req.user.id, 
@@ -828,8 +828,10 @@ app.post('/api/attendance/checkin', authenticateToken, async (req, res) => {
         status, 
         latitude ? parseFloat(latitude) : null, 
         longitude ? parseFloat(longitude) : null, 
-        calculatedDistance, 
-        wifi_name || null, 
+        calculatedDistance,
+        locationType,
+        checkInReason,
+        address || null,
         device_info || 'Web Mobile'
       ]
     );
@@ -838,8 +840,9 @@ app.post('/api/attendance/checkin', authenticateToken, async (req, res) => {
     res.json({
       ...row,
       verified_distance: calculatedDistance,
-      verified_wifi: wifi_name,
-      message: 'Chấm công thành công!'
+      location_type: locationType,
+      reason: checkInReason,
+      message: locationType === 'Office' ? 'Chấm công tại văn phòng thành công!' : 'Chấm công ngoài văn phòng thành công!'
     });
   } catch (err) {
     res.status(500).json({ error: err.message });

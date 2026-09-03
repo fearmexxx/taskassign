@@ -308,7 +308,13 @@ const initDatabase = () => {
               db.run(`ALTER TABLE attendance ADD COLUMN check_in_distance INTEGER`, () => {
                 db.run(`ALTER TABLE attendance ADD COLUMN check_in_wifi TEXT`, () => {
                   db.run(`ALTER TABLE attendance ADD COLUMN check_in_device TEXT`, () => {
-                    res();
+                    db.run(`ALTER TABLE attendance ADD COLUMN check_in_location_type TEXT DEFAULT 'Office'`, () => {
+                      db.run(`ALTER TABLE attendance ADD COLUMN check_in_reason TEXT`, () => {
+                        db.run(`ALTER TABLE attendance ADD COLUMN check_in_address TEXT`, () => {
+                          res();
+                        });
+                      });
+                    });
                   });
                 });
               });

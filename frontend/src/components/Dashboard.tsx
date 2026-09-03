@@ -50,6 +50,10 @@ interface TeamMemberToday {
   check_in: string | null;
   check_out: string | null;
   attendance_status: string | null;
+  check_in_distance?: number | null;
+  check_in_location_type?: 'Office' | 'Remote' | null;
+  check_in_reason?: string | null;
+  check_in_address?: string | null;
 }
 
 interface CompanySettings {
@@ -89,7 +93,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ onCheckInChange, setActive
   const [distanceMeters, setDistanceMeters] = useState<number | null>(null);
   const [gpsError, setGpsError] = useState<string | null>(null);
   const [isLocating, setIsLocating] = useState(false);
-  const [wifiName, setWifiName] = useState('VBE Agency');
+  const [userAddress, setUserAddress] = useState<string>('');
+  const [remoteReasonType, setRemoteReasonType] = useState<string>('Làm việc tại nhà (WFH)');
+  const [customReason, setCustomReason] = useState<string>('');
   const [isCheckingIn, setIsCheckingIn] = useState(false);
   const [checkInError, setCheckInError] = useState<string | null>(null);
 
@@ -115,9 +121,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ onCheckInChange, setActive
       if (res.ok) {
         const data = await res.json();
         setCompanySettings(data);
-        if (data.allowed_wifi_name) {
-          setWifiName(data.allowed_wifi_name);
-        }
         return data;
       }
     } catch (e) {
@@ -129,6 +132,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onCheckInChange, setActive
   const requestLocation = (targetSettings = companySettings) => {
     setIsLocating(true);
     setGpsError(null);
+    setUserAddress('');
     if (!navigator.geolocation) {
       setGpsError('Trình duyệt không hỗ trợ định vị GPS.');
       setIsLocating(false);
@@ -143,6 +147,20 @@ export const Dashboard: React.FC<DashboardProps> = ({ onCheckInChange, setActive
         const dist = calculateDistance(lat, lng, targetSettings.office_lat, targetSettings.office_lng);
         setDistanceMeters(dist);
         setIsLocating(false);
+
+        // Reverse Geocoding lấy tên địa chỉ đường phố cụ thể
+        fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`)
+          .then(res => res.json())
+          .then(geo => {
+            if (geo && geo.display_name) {
+              setUserAddress(geo.display_name);
+            } else {
+              setUserAddress(`Tọa độ: ${lat.toFixed(5)}, ${lng.toFixed(5)}`);
+            }
+          })
+          .catch(() => {
+            setUserAddress(`Tọa độ: ${lat.toFixed(5)}, ${lng.toFixed(5)}`);
+          });
       },
       (err) => {
         setIsLocating(false);
@@ -170,6 +188,19 @@ export const Dashboard: React.FC<DashboardProps> = ({ onCheckInChange, setActive
     const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
     const deviceInfo = isMobile ? 'Mobile Smartphone' : 'Desktop Browser';
 
+    const isOutOfRange = distanceMeters !== null && distanceMeters > companySettings.max_distance_meters;
+    let finalReason = '';
+    if (isOutOfRange) {
+      finalReason = customReason.trim() ? `${remoteReasonType} - ${customReason.trim()}` : remoteReasonType;
+      if (!finalReason) {
+        setCheckInError('Vui lòng chọn hoặc nhập lý do làm việc ngoài văn phòng để tiếp tục chấm công.');
+        setIsCheckingIn(false);
+        return;
+      }
+    } else {
+      finalReason = 'Tại văn phòng 772 Sư Vạn Hạnh';
+    }
+
     try {
       const res = await fetchWithAuth('/api/attendance/checkin', {
         method: 'POST',
@@ -177,14 +208,15 @@ export const Dashboard: React.FC<DashboardProps> = ({ onCheckInChange, setActive
         body: JSON.stringify({
           latitude: userCoords?.lat || null,
           longitude: userCoords?.lng || null,
-          wifi_name: wifiName,
+          reason: finalReason,
+          address: userAddress || null,
           device_info: deviceInfo
         })
       });
 
       const data = await res.json();
       if (!res.ok) {
-        setCheckInError(data.error || 'Chấm công thất bại. Vui lòng kiểm tra lại vị trí hoặc Wi-Fi.');
+        setCheckInError(data.error || 'Chấm công thất bại. Vui lòng thử lại.');
         setIsCheckingIn(false);
         return;
       }
@@ -733,7 +765,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onCheckInChange, setActive
                 {!attendance.check_in ? (
                   <button onClick={openCheckInModal} className="btn-neon checkin-btn" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
                     <MapPin size={18} />
-                    Chấm công GPS & Wi-Fi (VÀO CA)
+                    Chấm công GPS (VÀO CA)
                   </button>
                 ) : !attendance.check_out ? (
                   <button onClick={handleCheckOut} className="btn-outline checkin-btn" style={{ borderColor: 'var(--accent-orange)', color: 'var(--accent-orange)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
@@ -765,8 +797,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ onCheckInChange, setActive
                   <span>Trụ sở: <strong>772 EFG Sư Vạn Hạnh, Q.10</strong></span>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <Wifi size={13} style={{ color: '#00f2fe' }} />
-                  <span>Wi-Fi: <strong>{companySettings.allowed_wifi_name || 'VBE Agency'}</strong></span>
+                  <Navigation size={13} style={{ color: '#00f2fe' }} />
+                  <span>Bán kính: <strong>200m (Có hỗ trợ WFH / Gặp khách hàng)</strong></span>
                 </div>
               </div>
             </div>
@@ -911,18 +943,44 @@ export const Dashboard: React.FC<DashboardProps> = ({ onCheckInChange, setActive
                         </div>
                       </div>
 
-                      <div>
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
                         {isCheckedIn ? (
-                          <span style={{
-                            fontSize: 10,
-                            padding: '3px 8px',
-                            borderRadius: 12,
-                            fontWeight: 600,
-                            background: isLate ? 'rgba(245, 158, 11, 0.1)' : 'rgba(16, 185, 129, 0.1)',
-                            color: isLate ? '#d97706' : '#10b981'
-                          }}>
-                            {isLate ? 'Đi trễ' : 'Đúng giờ'}
-                          </span>
+                          <>
+                            <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                              <span style={{
+                                fontSize: 10,
+                                padding: '2px 8px',
+                                borderRadius: 12,
+                                fontWeight: 600,
+                                background: member.check_in_location_type === 'Remote' ? 'rgba(168, 85, 247, 0.12)' : 'rgba(16, 185, 129, 0.1)',
+                                color: member.check_in_location_type === 'Remote' ? '#7c3aed' : '#10b981'
+                              }}>
+                                {member.check_in_location_type === 'Remote' 
+                                  ? `Ngoài VP (${member.check_in_distance ? (member.check_in_distance > 1000 ? (member.check_in_distance/1000).toFixed(1) + 'km' : member.check_in_distance + 'm') : 'Xa'})`
+                                  : 'Tại VP'}
+                              </span>
+
+                              <span style={{
+                                fontSize: 10,
+                                padding: '2px 8px',
+                                borderRadius: 12,
+                                fontWeight: 600,
+                                background: isLate ? 'rgba(245, 158, 11, 0.1)' : 'rgba(16, 185, 129, 0.1)',
+                                color: isLate ? '#d97706' : '#10b981'
+                              }}>
+                                {isLate ? 'Đi trễ' : 'Đúng giờ'}
+                              </span>
+                            </div>
+
+                            {member.check_in_location_type === 'Remote' && member.check_in_reason && (
+                              <span 
+                                style={{ fontSize: 10, color: '#7c3aed', fontWeight: 500, maxWidth: 170, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} 
+                                title={`${member.check_in_reason}${member.check_in_address ? ` (${member.check_in_address})` : ''}`}
+                              >
+                                📍 {member.check_in_reason}
+                              </span>
+                            )}
+                          </>
                         ) : (
                           <span style={{
                             fontSize: 10,
@@ -1112,40 +1170,106 @@ export const Dashboard: React.FC<DashboardProps> = ({ onCheckInChange, setActive
               )}
             </div>
 
-            {/* Wi-Fi Verification Option */}
-            <div style={{
-              background: '#f8fafc',
-              border: '1px solid #e2e8f0',
-              borderRadius: 10,
-              padding: '12px 14px',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 6
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <label style={{ fontSize: 12, fontWeight: 600, color: '#334155', display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <Wifi size={14} style={{ color: '#00f2fe' }} />
-                  Tên mạng Wi-Fi văn phòng
-                </label>
-                <span style={{ fontSize: 10, color: '#10b981', fontWeight: 600 }}>Tùy chọn</span>
+            {/* Trường hợp ở xa văn phòng (> 200m): Hỏi xác nhận, chọn lý do & ghi nhận địa chỉ */}
+            {distanceMeters !== null && distanceMeters > companySettings.max_distance_meters ? (
+              <div style={{
+                background: '#fffbeb',
+                border: '1px solid #fde68a',
+                borderRadius: 12,
+                padding: '14px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 10
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#b45309', fontWeight: 700, fontSize: 13 }}>
+                  <AlertCircle size={18} />
+                  <span>Xác Nhận Chấm Công Từ Xa / Ngoài Văn Phòng</span>
+                </div>
+
+                <p style={{ margin: 0, fontSize: 12, color: '#92400e', lineHeight: 1.4 }}>
+                  Bạn đang ở cách trụ sở <strong>{distanceMeters > 1000 ? (distanceMeters / 1000).toFixed(1) + ' km' : distanceMeters + ' m'}</strong>. Bạn có muốn tiếp tục chấm công với trạng thái <strong>Ngoài văn phòng</strong> không?
+                </p>
+
+                {/* Địa chỉ thực tế ghi nhận qua reverse geocode */}
+                <div style={{
+                  background: '#ffffff',
+                  border: '1px solid #fcd34d',
+                  borderRadius: 8,
+                  padding: '8px 10px',
+                  fontSize: 11,
+                  color: '#475569',
+                  lineHeight: 1.4
+                }}>
+                  <span style={{ fontWeight: 600, color: '#1e293b' }}>📍 Địa chỉ hiện tại: </span>
+                  <span>{userAddress || 'Đang lấy địa chỉ thực tế từ GPS...'}</span>
+                </div>
+
+                {/* Chọn lý do */}
+                <div>
+                  <label style={{ fontSize: 12, fontWeight: 600, color: '#334155', marginBottom: 6, display: 'block' }}>
+                    Lý do làm việc ngoài VP (Bắt buộc):
+                  </label>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, marginBottom: 8 }}>
+                    {[
+                      'Làm việc tại nhà (WFH)',
+                      'Gặp khách hàng / Đối tác',
+                      'Đi công tác / Onsite',
+                      'Lý do khác'
+                    ].map((type) => (
+                      <button
+                        key={type}
+                        type="button"
+                        onClick={() => setRemoteReasonType(type)}
+                        style={{
+                          padding: '7px 8px',
+                          borderRadius: 6,
+                          border: remoteReasonType === type ? '2px solid #7c3aed' : '1px solid #cbd5e1',
+                          background: remoteReasonType === type ? 'rgba(124, 58, 237, 0.08)' : '#ffffff',
+                          color: remoteReasonType === type ? '#7c3aed' : '#475569',
+                          fontSize: 11,
+                          fontWeight: remoteReasonType === type ? 700 : 500,
+                          cursor: 'pointer',
+                          textAlign: 'left'
+                        }}
+                      >
+                        {type}
+                      </button>
+                    ))}
+                  </div>
+
+                  <input
+                    type="text"
+                    value={customReason}
+                    onChange={e => setCustomReason(e.target.value)}
+                    placeholder="Ghi chú thêm lý do (VD: Họp khách hàng tại Quận 1, WFH do ốm...)"
+                    style={{
+                      width: '100%',
+                      padding: '8px 10px',
+                      borderRadius: 6,
+                      border: '1px solid #cbd5e1',
+                      fontSize: 12,
+                      outline: 'none',
+                      boxSizing: 'border-box'
+                    }}
+                  />
+                </div>
               </div>
-              <input 
-                type="text"
-                value={wifiName}
-                onChange={e => setWifiName(e.target.value)}
-                placeholder="VBE Agency"
-                style={{
-                  padding: '8px 12px',
-                  borderRadius: 6,
-                  border: '1px solid #cbd5e1',
-                  fontSize: 13,
-                  outline: 'none'
-                }}
-              />
-              <span style={{ fontSize: 11, color: '#64748b' }}>
-                Mặc định: <strong>{companySettings.allowed_wifi_name || 'VBE Agency'}</strong> (Hỗ trợ xác thực khi ở trong nhà sóng GPS yếu).
-              </span>
-            </div>
+            ) : distanceMeters !== null ? (
+              <div style={{
+                background: '#f0fdf4',
+                border: '1px solid #bbf7d0',
+                borderRadius: 10,
+                padding: '12px 14px',
+                fontSize: 12,
+                color: '#15803d',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8
+              }}>
+                <CheckCircle2 size={18} />
+                <span>Bạn đang ở đúng trụ sở 772 Sư Vạn Hạnh (Hợp lệ để chấm công tại văn phòng).</span>
+              </div>
+            ) : null}
 
             {/* Submit Action Button */}
             <button
@@ -1162,6 +1286,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ onCheckInChange, setActive
                 justifyContent: 'center',
                 gap: 8,
                 borderRadius: 10,
+                background: distanceMeters !== null && distanceMeters > companySettings.max_distance_meters 
+                  ? 'linear-gradient(135deg, #7c3aed, #ec4899)' 
+                  : 'linear-gradient(135deg, #4f46e5, #00f2fe)',
                 cursor: (isCheckingIn || isLocating) ? 'not-allowed' : 'pointer'
               }}
             >
@@ -1170,10 +1297,15 @@ export const Dashboard: React.FC<DashboardProps> = ({ onCheckInChange, setActive
                   <RefreshCw className="animate-spin" size={18} />
                   <span>Đang ghi nhận lượt chấm công...</span>
                 </>
+              ) : distanceMeters !== null && distanceMeters > companySettings.max_distance_meters ? (
+                <>
+                  <Send size={18} />
+                  <span>XÁC NHẬN CHẤM CÔNG NGOÀI VĂN PHÒNG</span>
+                </>
               ) : (
                 <>
                   <CheckCircle2 size={20} />
-                  <span>XÁC NHẬN CHẤM CÔNG VÀO CA</span>
+                  <span>XÁC NHẬN CHẤM CÔNG TẠI VĂN PHÒNG</span>
                 </>
               )}
             </button>
