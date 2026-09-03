@@ -68,6 +68,20 @@ This log tracks the build history, feature additions, styling changes, and deplo
 - **In ấn & Xuất Bảng Công**:
   - Thêm tính năng In/Xuất bảng công tháng (`window.print()`) kèm định dạng in ấn chuyên nghiệp cho phòng kế toán/quản lý.
 
+### Phase 8: Chấm Công GPS (772 EFG Sư Vạn Hạnh, Q.10), Wi-Fi & Mobile Web App
+- **Định vị Vệ tinh GPS & Geofencing**:
+  - Trụ sở công ty: Số **772 EFG Sư Vạn Hạnh, Phường 12 (Hoà Hưng), Quận 10, TP.HCM** (tọa độ `10.7745, 106.6685`).
+  - Thiết lập bán kính cho phép: **200m** (đảm bảo bao quát toà nhà EFG Building và chống sai số GPS trong nhà).
+  - Tích hợp công thức Haversine đo khoảng cách chuẩn xác từng mét giữa vị trí nhân viên và trụ sở.
+- **Xác thực Wi-Fi Văn phòng**:
+  - Hỗ trợ mạng Wi-Fi **'VBE Agency'** (cho phép Admin tùy biến đổi tên mạng hoặc tọa độ trụ sở qua API `/api/company/settings`).
+  - Hỗ trợ xác thực kép: GPS trong bán kính 200m HOẶC kết nối Wi-Fi văn phòng 'VBE Agency'.
+- **Giao diện Tối ưu Hóa Di Động (Mobile-First)**:
+  - Bổ sung **Mobile Bottom Navigation Bar** dưới đáy màn hình (5 tab: Tổng quan, Dự án, Lịch & Ca, Bảng lương, Nhân sự/Báo cáo) cho thao tác 1 chạm bằng ngón tay cái.
+  - Thêm **Mobile Top Bar** hiển thị trạng thái vào ca và thông tin tài khoản.
+  - **Modal Chấm công GPS & Wi-Fi chuyên biệt**: Radar quét vệ tinh, hiển thị khoảng cách thời gian thực, nút xác nhận lớn dễ bấm.
+  - Ẩn sidebar desktop trên màn hình điện thoại ($\le 768px$) để tối ưu 100% diện tích làm việc.
+
 ---
 
 ## 🚀 Deployment Plan (Vercel + Neon + Render)

@@ -118,3 +118,98 @@ body {
 .animate-fade-in {
   animation: fadeIn 0.2s forwards ease-out;
 }
+
+/* --- MOBILE RESPONSIVE OPTIMIZATIONS (≤ 768px) --- */
+@media (max-width: 768px) {
+  .app-container {
+    flex-direction: column !important;
+    height: 100vh !important;
+    width: 100vw !important;
+    overflow: hidden !important;
+  }
+
+  .sidebar {
+    display: none !important;
+  }
+
+  .mobile-top-bar {
+    display: flex !important;
+  }
+
+  .mobile-bottom-nav {
+    display: flex !important;
+  }
+
+  .main-content-wrapper {
+    padding-bottom: 72px !important;
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .metrics-grid {
+    grid-template-columns: 1fr 1fr !important;
+    gap: 10px !important;
+    margin-bottom: 16px !important;
+  }
+
+  .metric-card {
+    padding: 12px 14px !important;
+  }
+
+  .metric-value {
+    font-size: 18px !important;
+  }
+
+  .metric-label {
+    font-size: 11px !important;
+  }
+
+  .main-dashboard-grid {
+    grid-template-columns: 1fr !important;
+    gap: 16px !important;
+  }
+
+  .dashboard-container, .salary-page, .project-view, .calendar-view, .reports-container, .dept-container {
+    padding: 14px 12px !important;
+  }
+
+  .header-section {
+    margin-bottom: 14px !important;
+  }
+
+  .header-title {
+    font-size: 20px !important;
+  }
+
+  .header-subtitle {
+    font-size: 12px !important;
+  }
+
+  .login-card {
+    width: 92vw !important;
+    padding: 24px 16px !important;
+    border-radius: 12px !important;
+  }
+
+  .login-title {
+    font-size: 22px !important;
+  }
+
+  .quick-accounts-grid {
+    grid-template-columns: 1fr 1fr !important;
+    gap: 6px !important;
+  }
+
+  .quick-acc-btn {
+    font-size: 11px !important;
+    padding: 6px !important;
+  }
+}
+
+@media (min-width: 769px) {
+  .mobile-top-bar,
+  .mobile-bottom-nav {
+    display: none !important;
+  }
+}
+

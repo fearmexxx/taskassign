@@ -277,6 +277,19 @@ const initDatabase = () => {
             status TEXT CHECK(status IN ('Submitted', 'Approved')) DEFAULT 'Submitted',
             FOREIGN KEY (user_id) REFERENCES users(id)
           )
+        `),
+        runCreateTable(`
+          CREATE TABLE IF NOT EXISTS company_settings (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            company_name TEXT DEFAULT 'VBE Agency',
+            office_address TEXT DEFAULT '772 EFG Sư Vạn Hạnh, Phường 12, Quận 10, TP.HCM',
+            office_lat REAL DEFAULT 10.7745,
+            office_lng REAL DEFAULT 106.6685,
+            max_distance_meters INTEGER DEFAULT 200,
+            allowed_wifi_name TEXT DEFAULT 'VBE Agency',
+            require_gps INTEGER DEFAULT 1,
+            require_wifi INTEGER DEFAULT 0
+          )
         `)
       ])
       .then(() => {
@@ -284,6 +297,38 @@ const initDatabase = () => {
           db.run(`ALTER TABLE users ADD COLUMN base_salary INTEGER DEFAULT 15000000`, (err) => {
             // Ignore error if column already exists
             res();
+          });
+        });
+      })
+      .then(() => {
+        // Bổ sung các cột lưu vị trí GPS & Wi-Fi cho bảng attendance nếu chưa có
+        return new Promise((res) => {
+          db.run(`ALTER TABLE attendance ADD COLUMN check_in_lat REAL`, () => {
+            db.run(`ALTER TABLE attendance ADD COLUMN check_in_lng REAL`, () => {
+              db.run(`ALTER TABLE attendance ADD COLUMN check_in_distance INTEGER`, () => {
+                db.run(`ALTER TABLE attendance ADD COLUMN check_in_wifi TEXT`, () => {
+                  db.run(`ALTER TABLE attendance ADD COLUMN check_in_device TEXT`, () => {
+                    res();
+                  });
+                });
+              });
+            });
+          });
+        });
+      })
+      .then(() => {
+        // Khởi tạo cài đặt trụ sở công ty VBE Agency nếu chưa có
+        return new Promise((res) => {
+          db.get("SELECT COUNT(*) as count FROM company_settings", (err, row) => {
+            if (!err && row && row.count === 0) {
+              db.run(
+                `INSERT INTO company_settings (company_name, office_address, office_lat, office_lng, max_distance_meters, allowed_wifi_name, require_gps, require_wifi)
+                 VALUES ('VBE Agency', '772 EFG Sư Vạn Hạnh, Phường 12 (Hoà Hưng), Quận 10, TP.HCM', 10.7745, 106.6685, 200, 'VBE Agency', 1, 0)`,
+                () => res()
+              );
+            } else {
+              res();
+            }
           });
         });
       })

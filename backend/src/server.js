@@ -665,33 +665,185 @@ app.get('/api/attendance/today-team', authenticateToken, async (req, res) => {
   }
 });
 
-// Check-in action (Ca chuẩn: 9h30 - 18h30. Sau 9h30 tính là Late)
-app.post('/api/attendance/checkin', authenticateToken, (req, res) => {
+// Haversine formula to calculate distance between two coordinates in meters
+function calculateDistanceMeters(lat1, lon1, lat2, lon2) {
+  const R = 6371e3; // Earth radius in meters
+  const toRad = (deg) => (deg * Math.PI) / 180;
+  const phi1 = toRad(lat1);
+  const phi2 = toRad(lat2);
+  const deltaPhi = toRad(lat2 - lat1);
+  const deltaLambda = toRad(lon2 - lon1);
+
+  const a =
+    Math.sin(deltaPhi / 2) * Math.sin(deltaPhi / 2) +
+    Math.cos(phi1) * Math.cos(phi2) * Math.sin(deltaLambda / 2) * Math.sin(deltaLambda / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+  return Math.round(R * c);
+}
+
+// Get company office settings (GPS coordinates, address, wifi name, radius)
+app.get('/api/company/settings', authenticateToken, (req, res) => {
+  db.get(`SELECT * FROM company_settings ORDER BY id ASC LIMIT 1`, [], (err, row) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json(row || {
+      company_name: 'VBE Agency',
+      office_address: '772 EFG Sư Vạn Hạnh, Phường 12 (Hoà Hưng), Quận 10, TP.HCM',
+      office_lat: 10.7745,
+      office_lng: 106.6685,
+      max_distance_meters: 200,
+      allowed_wifi_name: 'VBE Agency',
+      require_gps: 1,
+      require_wifi: 0
+    });
+  });
+});
+
+// Update company office settings (Admin only)
+app.put('/api/company/settings', authenticateToken, requireRole(['Admin']), (req, res) => {
+  const { company_name, office_address, office_lat, office_lng, max_distance_meters, allowed_wifi_name, require_gps, require_wifi } = req.body;
+  
+  db.get(`SELECT id FROM company_settings ORDER BY id ASC LIMIT 1`, [], (err, row) => {
+    if (err) return res.status(500).json({ error: err.message });
+    
+    if (row) {
+      db.run(
+        `UPDATE company_settings 
+         SET company_name = ?, office_address = ?, office_lat = ?, office_lng = ?, 
+             max_distance_meters = ?, allowed_wifi_name = ?, require_gps = ?, require_wifi = ?
+         WHERE id = ?`,
+        [
+          company_name || 'VBE Agency',
+          office_address || '772 EFG Sư Vạn Hạnh, Phường 12 (Hoà Hưng), Quận 10, TP.HCM',
+          office_lat !== undefined ? parseFloat(office_lat) : 10.7745,
+          office_lng !== undefined ? parseFloat(office_lng) : 106.6685,
+          max_distance_meters !== undefined ? parseInt(max_distance_meters) : 200,
+          allowed_wifi_name || 'VBE Agency',
+          require_gps !== undefined ? (require_gps ? 1 : 0) : 1,
+          require_wifi !== undefined ? (require_wifi ? 1 : 0) : 0,
+          row.id
+        ],
+        function(updateErr) {
+          if (updateErr) return res.status(500).json({ error: updateErr.message });
+          res.json({ message: 'Cập nhật cài đặt trụ sở thành công' });
+        }
+      );
+    } else {
+      db.run(
+        `INSERT INTO company_settings (company_name, office_address, office_lat, office_lng, max_distance_meters, allowed_wifi_name, require_gps, require_wifi)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          company_name || 'VBE Agency',
+          office_address || '772 EFG Sư Vạn Hạnh, Phường 12 (Hoà Hưng), Quận 10, TP.HCM',
+          office_lat !== undefined ? parseFloat(office_lat) : 10.7745,
+          office_lng !== undefined ? parseFloat(office_lng) : 106.6685,
+          max_distance_meters !== undefined ? parseInt(max_distance_meters) : 200,
+          allowed_wifi_name || 'VBE Agency',
+          require_gps !== undefined ? (require_gps ? 1 : 0) : 1,
+          require_wifi !== undefined ? (require_wifi ? 1 : 0) : 0
+        ],
+        function(insertErr) {
+          if (insertErr) return res.status(500).json({ error: insertErr.message });
+          res.json({ message: 'Tạo cài đặt trụ sở thành công' });
+        }
+      );
+    }
+  });
+});
+
+// Check-in action (GPS & Wi-Fi Verification, Ca chuẩn: 9h30 - 18h30. Sau 9h30 tính là Late)
+app.post('/api/attendance/checkin', authenticateToken, async (req, res) => {
   const vnTime = getVietnamTime();
   const today = vnTime.dateString;
   const timeString = vnTime.timeString;
   
-  // Decide status (Late if check-in is after 09:30 AM Vietnam time)
-  const isLate = vnTime.hour > 9 || (vnTime.hour === 9 && vnTime.minute > 30);
-  const status = isLate ? 'Late' : 'Present';
+  const { latitude, longitude, wifi_name, device_info } = req.body;
 
-  db.run(
-    `INSERT INTO attendance (user_id, date, check_in, status) 
-     VALUES (?, ?, ?, ?)
-     ON CONFLICT(user_id, date) DO UPDATE SET check_in = COALESCE(attendance.check_in, excluded.check_in)`,
-    [req.user.id, today, timeString, status],
-    function(err) {
-      if (err) return res.status(500).json({ error: err.message });
-      db.get(
-        `SELECT * FROM attendance WHERE user_id = ? AND date = ?`,
-        [req.user.id, today],
-        (err, row) => {
-          if (err) return res.status(500).json({ error: err.message });
-          res.json(row);
-        }
-      );
+  try {
+    // 1. Fetch office settings
+    const settings = await dbGet(`SELECT * FROM company_settings ORDER BY id ASC LIMIT 1`) || {
+      office_lat: 10.7745,
+      office_lng: 106.6685,
+      max_distance_meters: 200,
+      allowed_wifi_name: 'VBE Agency',
+      require_gps: 1,
+      require_wifi: 0
+    };
+
+    let calculatedDistance = null;
+    let isGpsValid = false;
+    let isWifiValid = false;
+
+    // Check GPS
+    if (latitude && longitude) {
+      const userLat = parseFloat(latitude);
+      const userLng = parseFloat(longitude);
+      calculatedDistance = calculateDistanceMeters(userLat, userLng, settings.office_lat, settings.office_lng);
+      isGpsValid = calculatedDistance <= settings.max_distance_meters;
     }
-  );
+
+    // Check Wi-Fi
+    if (wifi_name && typeof wifi_name === 'string') {
+      const cleanWifi = wifi_name.trim().toLowerCase();
+      const targetWifi = (settings.allowed_wifi_name || 'VBE Agency').toLowerCase();
+      isWifiValid = cleanWifi === targetWifi || cleanWifi.includes('vbe');
+    }
+
+    // Validation rule: Must satisfy GPS (within radius) OR connected to Office Wi-Fi
+    const isLocationValid = isGpsValid || isWifiValid;
+
+    if (!isLocationValid) {
+      if (calculatedDistance !== null) {
+        return res.status(400).json({
+          error: `Bạn đang ở cách trụ sở ${calculatedDistance}m (Vượt quá bán kính ${settings.max_distance_meters}m). Vui lòng có mặt tại trụ sở 772 EFG Sư Vạn Hạnh hoặc kết nối Wi-Fi '${settings.allowed_wifi_name}' để chấm công.`,
+          distance: calculatedDistance,
+          max_distance: settings.max_distance_meters
+        });
+      } else {
+        return res.status(400).json({
+          error: `Vui lòng bật quyền truy cập vị trí GPS trên trình duyệt hoặc xác nhận kết nối Wi-Fi '${settings.allowed_wifi_name}' để chấm công.`,
+          require_gps: true
+        });
+      }
+    }
+
+    // Decide status (Late if check-in is after 09:30 AM Vietnam time)
+    const isLate = vnTime.hour > 9 || (vnTime.hour === 9 && vnTime.minute > 30);
+    const status = isLate ? 'Late' : 'Present';
+
+    await dbRun(
+      `INSERT INTO attendance (user_id, date, check_in, status, check_in_lat, check_in_lng, check_in_distance, check_in_wifi, check_in_device) 
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(user_id, date) DO UPDATE SET 
+         check_in = COALESCE(attendance.check_in, excluded.check_in),
+         check_in_lat = COALESCE(attendance.check_in_lat, excluded.check_in_lat),
+         check_in_lng = COALESCE(attendance.check_in_lng, excluded.check_in_lng),
+         check_in_distance = COALESCE(attendance.check_in_distance, excluded.check_in_distance),
+         check_in_wifi = COALESCE(attendance.check_in_wifi, excluded.check_in_wifi),
+         check_in_device = COALESCE(attendance.check_in_device, excluded.check_in_device)`,
+      [
+        req.user.id, 
+        today, 
+        timeString, 
+        status, 
+        latitude ? parseFloat(latitude) : null, 
+        longitude ? parseFloat(longitude) : null, 
+        calculatedDistance, 
+        wifi_name || null, 
+        device_info || 'Web Mobile'
+      ]
+    );
+
+    const row = await dbGet(`SELECT * FROM attendance WHERE user_id = ? AND date = ?`, [req.user.id, today]);
+    res.json({
+      ...row,
+      verified_distance: calculatedDistance,
+      verified_wifi: wifi_name,
+      message: 'Chấm công thành công!'
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // Check-out action

@@ -9,6 +9,12 @@ import {
   Calendar,
   Layers,
   CheckCircle2,
+  MapPin,
+  Wifi,
+  Navigation,
+  RefreshCw,
+  X,
+  Smartphone
 } from 'lucide-react';
 
 interface DashboardProps {
@@ -46,6 +52,17 @@ interface TeamMemberToday {
   attendance_status: string | null;
 }
 
+interface CompanySettings {
+  company_name: string;
+  office_address: string;
+  office_lat: number;
+  office_lng: number;
+  max_distance_meters: number;
+  allowed_wifi_name: string;
+  require_gps: number;
+  require_wifi: number;
+}
+
 export const Dashboard: React.FC<DashboardProps> = ({ onCheckInChange, setActiveTab }) => {
   const { user, fetchWithAuth } = useAuth();
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -55,6 +72,133 @@ export const Dashboard: React.FC<DashboardProps> = ({ onCheckInChange, setActive
   const [reportText, setReportText] = useState('');
   const [reportSubmitted, setReportSubmitted] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+
+  // GPS & Wi-Fi Mobile Check-in States
+  const [showCheckInModal, setShowCheckInModal] = useState(false);
+  const [companySettings, setCompanySettings] = useState<CompanySettings>({
+    company_name: 'VBE Agency',
+    office_address: '772 EFG Sư Vạn Hạnh, Phường 12 (Hoà Hưng), Quận 10, TP.HCM',
+    office_lat: 10.7745,
+    office_lng: 106.6685,
+    max_distance_meters: 200,
+    allowed_wifi_name: 'VBE Agency',
+    require_gps: 1,
+    require_wifi: 0
+  });
+  const [userCoords, setUserCoords] = useState<{ lat: number; lng: number } | null>(null);
+  const [distanceMeters, setDistanceMeters] = useState<number | null>(null);
+  const [gpsError, setGpsError] = useState<string | null>(null);
+  const [isLocating, setIsLocating] = useState(false);
+  const [wifiName, setWifiName] = useState('VBE Agency');
+  const [isCheckingIn, setIsCheckingIn] = useState(false);
+  const [checkInError, setCheckInError] = useState<string | null>(null);
+
+  // Haversine distance calculator
+  const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
+    const R = 6371e3;
+    const toRad = (deg: number) => (deg * Math.PI) / 180;
+    const phi1 = toRad(lat1);
+    const phi2 = toRad(lat2);
+    const deltaPhi = toRad(lat2 - lat1);
+    const deltaLambda = toRad(lon2 - lon1);
+
+    const a =
+      Math.sin(deltaPhi / 2) * Math.sin(deltaPhi / 2) +
+      Math.cos(phi1) * Math.cos(phi2) * Math.sin(deltaLambda / 2) * Math.sin(deltaLambda / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return Math.round(R * c);
+  };
+
+  const loadCompanySettings = async () => {
+    try {
+      const res = await fetchWithAuth('/api/company/settings');
+      if (res.ok) {
+        const data = await res.json();
+        setCompanySettings(data);
+        if (data.allowed_wifi_name) {
+          setWifiName(data.allowed_wifi_name);
+        }
+        return data;
+      }
+    } catch (e) {
+      console.warn("Could not load company settings", e);
+    }
+    return companySettings;
+  };
+
+  const requestLocation = (targetSettings = companySettings) => {
+    setIsLocating(true);
+    setGpsError(null);
+    if (!navigator.geolocation) {
+      setGpsError('Trình duyệt không hỗ trợ định vị GPS.');
+      setIsLocating(false);
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const lat = pos.coords.latitude;
+        const lng = pos.coords.longitude;
+        setUserCoords({ lat, lng });
+        const dist = calculateDistance(lat, lng, targetSettings.office_lat, targetSettings.office_lng);
+        setDistanceMeters(dist);
+        setIsLocating(false);
+      },
+      (err) => {
+        setIsLocating(false);
+        if (err.code === 1) {
+          setGpsError('Bạn đã từ chối cấp quyền vị trí. Vui lòng bấm "Cho phép truy cập vị trí" trên trình duyệt điện thoại để chấm công.');
+        } else {
+          setGpsError(`Không thể lấy vị trí GPS: ${err.message}`);
+        }
+      },
+      { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 }
+    );
+  };
+
+  const openCheckInModal = async () => {
+    setCheckInError(null);
+    setShowCheckInModal(true);
+    const latestSettings = await loadCompanySettings();
+    requestLocation(latestSettings);
+  };
+
+  const handlePerformCheckIn = async () => {
+    setIsCheckingIn(true);
+    setCheckInError(null);
+
+    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+    const deviceInfo = isMobile ? 'Mobile Smartphone' : 'Desktop Browser';
+
+    try {
+      const res = await fetchWithAuth('/api/attendance/checkin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          latitude: userCoords?.lat || null,
+          longitude: userCoords?.lng || null,
+          wifi_name: wifiName,
+          device_info: deviceInfo
+        })
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        setCheckInError(data.error || 'Chấm công thất bại. Vui lòng kiểm tra lại vị trí hoặc Wi-Fi.');
+        setIsCheckingIn(false);
+        return;
+      }
+
+      setAttendance(data);
+      onCheckInChange(true);
+      setShowCheckInModal(false);
+      fetchDashboardData();
+    } catch (e: any) {
+      setCheckInError(e.message || 'Lỗi kết nối khi gửi chấm công.');
+    } finally {
+      setIsCheckingIn(false);
+    }
+  };
 
   // Đồng hồ thời gian thực chuẩn giờ Việt Nam (GMT+7)
   useEffect(() => {
@@ -99,20 +243,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ onCheckInChange, setActive
   useEffect(() => {
     fetchDashboardData();
   }, []);
-
-  const handleCheckIn = async () => {
-    try {
-      const res = await fetchWithAuth('/api/attendance/checkin', { method: 'POST' });
-      if (res.ok) {
-        const data = await res.json();
-        setAttendance(data);
-        onCheckInChange(true);
-        fetchDashboardData();
-      }
-    } catch (e) {
-      console.error(e);
-    }
-  };
 
   const handleCheckOut = async () => {
     try {
@@ -601,16 +731,43 @@ export const Dashboard: React.FC<DashboardProps> = ({ onCheckInChange, setActive
 
               <div className="checkin-actions">
                 {!attendance.check_in ? (
-                  <button onClick={handleCheckIn} className="btn-neon checkin-btn">
-                    Chấm công vào (VÀO CA)
+                  <button onClick={openCheckInModal} className="btn-neon checkin-btn" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+                    <MapPin size={18} />
+                    Chấm công GPS & Wi-Fi (VÀO CA)
                   </button>
                 ) : !attendance.check_out ? (
-                  <button onClick={handleCheckOut} className="btn-outline checkin-btn" style={{ borderColor: 'var(--accent-orange)', color: 'var(--accent-orange)' }}>
+                  <button onClick={handleCheckOut} className="btn-outline checkin-btn" style={{ borderColor: 'var(--accent-orange)', color: 'var(--accent-orange)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+                    <Clock size={18} />
                     Chấm công ra (HẾT CA)
                   </button>
                 ) : (
-                  <span style={{ color: 'var(--accent-green)', fontWeight: 600 }}>Hoàn thành ngày làm việc</span>
+                  <span style={{ color: 'var(--accent-green)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <CheckCircle size={18} /> Hoàn thành ngày làm việc
+                  </span>
                 )}
+              </div>
+
+              <div style={{
+                marginTop: 12,
+                padding: '8px 12px',
+                background: '#f8f9fa',
+                borderRadius: 8,
+                fontSize: 12,
+                color: 'var(--text-secondary)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                flexWrap: 'wrap',
+                gap: 6
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <MapPin size={13} style={{ color: '#4f46e5' }} />
+                  <span>Trụ sở: <strong>772 EFG Sư Vạn Hạnh, Q.10</strong></span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <Wifi size={13} style={{ color: '#00f2fe' }} />
+                  <span>Wi-Fi: <strong>{companySettings.allowed_wifi_name || 'VBE Agency'}</strong></span>
+                </div>
               </div>
             </div>
 
@@ -787,6 +944,242 @@ export const Dashboard: React.FC<DashboardProps> = ({ onCheckInChange, setActive
           </div>
         </div>
       </div>
+
+      {/* MODAL CHẤM CÔNG GPS & WI-FI CHO MOBILE & WEB */}
+      {showCheckInModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(0, 0, 0, 0.65)',
+          backdropFilter: 'blur(4px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000,
+          padding: 16
+        }}>
+          <div style={{
+            background: '#ffffff',
+            borderRadius: 16,
+            width: '100%',
+            maxWidth: 460,
+            padding: 22,
+            boxShadow: '0 20px 40px rgba(0,0,0,0.2)',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 14,
+            maxHeight: '90vh',
+            overflowY: 'auto'
+          }}>
+            {/* Modal Header */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div style={{
+                  background: 'linear-gradient(135deg, #4f46e5, #00f2fe)',
+                  color: '#fff',
+                  borderRadius: 10,
+                  width: 38,
+                  height: 38,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}>
+                  <MapPin size={20} />
+                </div>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: 'var(--text-primary)' }}>
+                    Điểm Danh GPS & Wi-Fi
+                  </h3>
+                  <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>VBE Agency • Mobile Attendance</span>
+                </div>
+              </div>
+
+              <button 
+                onClick={() => setShowCheckInModal(false)}
+                style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', padding: 4 }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Error Banner */}
+            {checkInError && (
+              <div style={{
+                background: '#fef2f2',
+                border: '1px solid #fecaca',
+                color: '#dc2626',
+                padding: '10px 14px',
+                borderRadius: 8,
+                fontSize: 12,
+                lineHeight: 1.4
+              }}>
+                {checkInError}
+              </div>
+            )}
+
+            {/* Office Target Card */}
+            <div style={{
+              background: '#f8fafc',
+              border: '1px solid #e2e8f0',
+              borderRadius: 10,
+              padding: '12px 14px',
+              fontSize: 12
+            }}>
+              <div style={{ fontWeight: 600, color: '#334155', marginBottom: 4, display: 'flex', alignItems: 'center', gap: 6 }}>
+                <MapPin size={14} style={{ color: '#4f46e5' }} />
+                <span>Trụ sở chính VBE Agency</span>
+              </div>
+              <div style={{ color: '#64748b' }}>{companySettings.office_address}</div>
+              <div style={{ marginTop: 6, display: 'flex', gap: 12, color: '#475569', fontSize: 11 }}>
+                <span>Bán kính cho phép: <strong>{companySettings.max_distance_meters}m</strong></span>
+                <span>Tọa độ: <strong>{companySettings.office_lat}, {companySettings.office_lng}</strong></span>
+              </div>
+            </div>
+
+            {/* GPS Radar / Detection Box */}
+            <div style={{
+              border: '2px dashed ' + (distanceMeters !== null && distanceMeters <= companySettings.max_distance_meters ? '#10b981' : isLocating ? '#4f46e5' : '#cbd5e1'),
+              borderRadius: 12,
+              padding: '18px 14px',
+              textAlign: 'center',
+              background: distanceMeters !== null && distanceMeters <= companySettings.max_distance_meters ? 'rgba(16, 185, 129, 0.04)' : '#fafafa'
+            }}>
+              {isLocating ? (
+                <div>
+                  <RefreshCw className="animate-spin" size={30} style={{ color: '#4f46e5', margin: '0 auto 8px' }} />
+                  <div style={{ fontWeight: 600, fontSize: 13, color: '#334155' }}>Đang dò tìm tọa độ GPS của bạn...</div>
+                  <div style={{ fontSize: 11, color: '#64748b', marginTop: 4 }}>Vui lòng bấm Cho phép nếu trình duyệt hỏi quyền vị trí</div>
+                </div>
+              ) : distanceMeters !== null ? (
+                <div>
+                  <div style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    padding: '6px 14px',
+                    borderRadius: 20,
+                    fontWeight: 700,
+                    fontSize: 14,
+                    background: distanceMeters <= companySettings.max_distance_meters ? '#dcfce7' : '#fef3c7',
+                    color: distanceMeters <= companySettings.max_distance_meters ? '#15803d' : '#b45309',
+                    marginBottom: 8
+                  }}>
+                    <Navigation size={15} />
+                    <span>Khoảng cách: {distanceMeters} mét</span>
+                  </div>
+
+                  <div style={{ fontSize: 12, color: distanceMeters <= companySettings.max_distance_meters ? '#15803d' : '#b45309', fontWeight: 600 }}>
+                    {distanceMeters <= companySettings.max_distance_meters 
+                      ? '✓ Bạn đang ở trong phạm vi văn phòng 772 Sư Vạn Hạnh' 
+                      : `⚠️ Bạn đang cách văn phòng ${distanceMeters}m (Vượt quá bán kính ${companySettings.max_distance_meters}m)`}
+                  </div>
+
+                  <button 
+                    onClick={() => requestLocation()} 
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      color: '#4f46e5',
+                      fontSize: 12,
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      marginTop: 8,
+                      textDecoration: 'underline'
+                    }}
+                  >
+                    Đo lại vị trí GPS
+                  </button>
+                </div>
+              ) : (
+                <div>
+                  <MapPin size={28} style={{ color: '#94a3b8', margin: '0 auto 8px' }} />
+                  {gpsError ? (
+                    <div style={{ color: '#dc2626', fontSize: 12, marginBottom: 8 }}>{gpsError}</div>
+                  ) : (
+                    <div style={{ fontSize: 13, color: '#64748b', marginBottom: 8 }}>Chưa có tín hiệu GPS</div>
+                  )}
+                  <button 
+                    onClick={() => requestLocation()} 
+                    className="btn-outline" 
+                    style={{ padding: '6px 14px', fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                  >
+                    <Navigation size={14} /> Lấy vị trí GPS
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Wi-Fi Verification Option */}
+            <div style={{
+              background: '#f8fafc',
+              border: '1px solid #e2e8f0',
+              borderRadius: 10,
+              padding: '12px 14px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 6
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <label style={{ fontSize: 12, fontWeight: 600, color: '#334155', display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <Wifi size={14} style={{ color: '#00f2fe' }} />
+                  Tên mạng Wi-Fi văn phòng
+                </label>
+                <span style={{ fontSize: 10, color: '#10b981', fontWeight: 600 }}>Tùy chọn</span>
+              </div>
+              <input 
+                type="text"
+                value={wifiName}
+                onChange={e => setWifiName(e.target.value)}
+                placeholder="VBE Agency"
+                style={{
+                  padding: '8px 12px',
+                  borderRadius: 6,
+                  border: '1px solid #cbd5e1',
+                  fontSize: 13,
+                  outline: 'none'
+                }}
+              />
+              <span style={{ fontSize: 11, color: '#64748b' }}>
+                Mặc định: <strong>{companySettings.allowed_wifi_name || 'VBE Agency'}</strong> (Hỗ trợ xác thực khi ở trong nhà sóng GPS yếu).
+              </span>
+            </div>
+
+            {/* Submit Action Button */}
+            <button
+              onClick={handlePerformCheckIn}
+              disabled={isCheckingIn || isLocating}
+              className="btn-neon"
+              style={{
+                width: '100%',
+                padding: '14px',
+                fontSize: 15,
+                fontWeight: 700,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 8,
+                borderRadius: 10,
+                cursor: (isCheckingIn || isLocating) ? 'not-allowed' : 'pointer'
+              }}
+            >
+              {isCheckingIn ? (
+                <>
+                  <RefreshCw className="animate-spin" size={18} />
+                  <span>Đang ghi nhận lượt chấm công...</span>
+                </>
+              ) : (
+                <>
+                  <CheckCircle2 size={20} />
+                  <span>XÁC NHẬN CHẤM CÔNG VÀO CA</span>
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
