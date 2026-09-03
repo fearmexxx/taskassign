@@ -592,11 +592,36 @@ app.delete('/api/tasks/:id', authenticateToken, (req, res) => {
   });
 });
 
-// --- ATTENDANCE SYSTEM (CHẤM CÔNG) ---
+// --- ATTENDANCE SYSTEM (CHẤM CÔNG VBE AGENCY) ---
+
+// Vietnam Timezone (GMT+7) Helper
+const getVietnamTime = (date = new Date()) => {
+  const formatter = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Ho_Chi_Minh',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false
+  });
+  
+  const parts = formatter.formatToParts(date);
+  const map = {};
+  parts.forEach(p => { map[p.type] = p.value; });
+  
+  const dateString = `${map.year}-${map.month}-${map.day}`;
+  const timeString = `${map.hour}:${map.minute}:${map.second}`;
+  const hour = parseInt(map.hour, 10);
+  const minute = parseInt(map.minute, 10);
+  
+  return { dateString, timeString, hour, minute };
+};
 
 // Daily check-in status for current user
 app.get('/api/attendance/today', authenticateToken, (req, res) => {
-  const today = new Date().toISOString().split('T')[0];
+  const today = getVietnamTime().dateString;
   db.get(
     `SELECT * FROM attendance WHERE user_id = ? AND date = ?`,
     [req.user.id, today],
@@ -607,14 +632,36 @@ app.get('/api/attendance/today', authenticateToken, (req, res) => {
   );
 });
 
-// Check-in action
+// Get team attendance status today for all staff of VBE Agency
+app.get('/api/attendance/today-team', authenticateToken, async (req, res) => {
+  try {
+    const today = getVietnamTime().dateString;
+    const usersWithAttendance = await dbAll(
+      `SELECT u.id, u.name, u.email, u.role, d.name as department_name,
+              a.check_in, a.check_out, a.status as attendance_status
+       FROM users u
+       LEFT JOIN departments d ON u.department_id = d.id
+       LEFT JOIN attendance a ON u.id = a.user_id AND a.date = ?
+       ORDER BY 
+         CASE WHEN a.check_in IS NOT NULL THEN 0 ELSE 1 END,
+         a.check_in ASC,
+         u.name ASC`,
+      [today]
+    );
+    res.json(usersWithAttendance);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Check-in action (Ca chuẩn: 9h30 - 18h30. Sau 9h30 tính là Late)
 app.post('/api/attendance/checkin', authenticateToken, (req, res) => {
-  const today = new Date().toISOString().split('T')[0];
-  const now = new Date();
-  const timeString = now.toTimeString().split(' ')[0]; // HH:MM:SS
+  const vnTime = getVietnamTime();
+  const today = vnTime.dateString;
+  const timeString = vnTime.timeString;
   
-  // Decide status (Late if check-in is after 09:30 AM)
-  const isLate = now.getHours() > 9 || (now.getHours() === 9 && now.getMinutes() > 30);
+  // Decide status (Late if check-in is after 09:30 AM Vietnam time)
+  const isLate = vnTime.hour > 9 || (vnTime.hour === 9 && vnTime.minute > 30);
   const status = isLate ? 'Late' : 'Present';
 
   db.run(
@@ -638,9 +685,9 @@ app.post('/api/attendance/checkin', authenticateToken, (req, res) => {
 
 // Check-out action
 app.post('/api/attendance/checkout', authenticateToken, (req, res) => {
-  const today = new Date().toISOString().split('T')[0];
-  const now = new Date();
-  const timeString = now.toTimeString().split(' ')[0]; // HH:MM:SS
+  const vnTime = getVietnamTime();
+  const today = vnTime.dateString;
+  const timeString = vnTime.timeString;
 
   db.run(
     `UPDATE attendance 
@@ -699,7 +746,7 @@ app.get('/api/attendance/admin-logs', authenticateToken, requireRole(['Admin', '
 
 // GET /api/attendance/salary-report
 app.get('/api/attendance/salary-report', authenticateToken, async (req, res) => {
-  const month = req.query.month || new Date().toISOString().slice(0, 7); // YYYY-MM
+  const month = req.query.month || getVietnamTime().dateString.slice(0, 7); // YYYY-MM
   
   try {
     let usersQuery = `
@@ -830,7 +877,7 @@ app.get('/api/reports', authenticateToken, (req, res) => {
 // Submit report
 app.post('/api/reports', authenticateToken, (req, res) => {
   const { content } = req.body;
-  const today = new Date().toISOString().split('T')[0];
+  const today = getVietnamTime().dateString;
 
   if (!content) {
     return res.status(400).json({ error: 'Nội dung báo cáo là bắt buộc' });

@@ -54,6 +54,20 @@ This log tracks the build history, feature additions, styling changes, and deplo
   - Implemented dynamic SQL translation (transforming SQLite table commands and `?` query arguments into PostgreSQL `$1, $2, ...` syntax).
   - Ensured all updates to users, departments, and project settings are stored permanently in the Neon cloud database.
 
+### Phase 7: Triển Khai Nội Bộ VBE Agency (< 15 Nhân Sự, www.vbe.com.vn)
+- **Múi giờ & Chấm công Chuẩn Việt Nam (GMT+7)**:
+  - Xây dựng helper `getVietnamTime()` (`Asia/Ho_Chi_Minh`) chuẩn hóa toàn bộ thời gian hệ thống, khắc phục lỗi lệch múi giờ UTC khi deploy Render/Vercel.
+  - Kiểm tra đi trễ chính xác tuyệt đối sau 09:30 AM theo giờ Việt Nam.
+  - Bổ sung endpoint `GET /api/attendance/today-team` hỗ trợ điểm diện toàn bộ nhân sự VBE Agency trong ngày.
+- **Widget Điểm diện Đội ngũ VBE**:
+  - Tích hợp widget hiển thị danh sách toàn bộ nhân sự cùng trạng thái có mặt/chưa vào ca/đi trễ theo thời gian thực.
+  - Thêm đồng hồ thời gian thực (Live Clock GMT+7) và thông số ca chuẩn: 09:30 - 18:30 (9.0h/ngày).
+- **Thương hiệu & Nhận diện VBE Agency**:
+  - Cập nhật logo VBE, slogan hệ thống, link website `www.vbe.com.vn`.
+  - Cập nhật title web, favicon, gợi ý đăng nhập email domain `@vbe.com.vn`.
+- **In ấn & Xuất Bảng Công**:
+  - Thêm tính năng In/Xuất bảng công tháng (`window.print()`) kèm định dạng in ấn chuyên nghiệp cho phòng kế toán/quản lý.
+
 ---
 
 ## 🚀 Deployment Plan (Vercel + Neon + Render)

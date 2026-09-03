@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { Calendar, DollarSign, Clock, Users } from 'lucide-react';
+import { Calendar, DollarSign, Clock, Users, Printer } from 'lucide-react';
 
 interface SalaryReportRow {
   user_id: number;
@@ -397,7 +397,7 @@ export const SalaryManager: React.FC = () => {
         .month-selector {
           display: flex;
           align-items: center;
-          gap: 8px;
+          gap: 10px;
         }
         .month-select {
           padding: 8px 12px;
@@ -413,16 +413,66 @@ export const SalaryManager: React.FC = () => {
           outline: none;
           border-color: #4f46e5;
         }
+        .print-btn {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          padding: 8px 14px;
+          border-radius: 6px;
+          background: #ffffff;
+          border: 1px solid var(--border-color);
+          color: var(--text-primary);
+          font-weight: 600;
+          font-size: 13px;
+          cursor: pointer;
+          transition: var(--transition-smooth);
+        }
+        .print-btn:hover {
+          background: #f8f9fa;
+          border-color: #4f46e5;
+          color: #4f46e5;
+        }
+        @media print {
+          .month-selector, .sidebar, aside, .btn-neon, .btn-outline {
+            display: none !important;
+          }
+          .salary-page {
+            padding: 0 !important;
+            background: #ffffff !important;
+          }
+          .table-card, .logs-card {
+            border: none !important;
+            box-shadow: none !important;
+            padding: 0 !important;
+          }
+        }
       `}</style>
 
       <div className="salary-header-section">
         <div>
-          <h1 style={{ fontSize: 24, fontWeight: 700, color: 'var(--text-primary)' }}>Bảng Công & Tính Lương Tự Động</h1>
-          <p style={{ color: 'var(--text-secondary)', fontSize: 14 }}>Theo dõi ngày công làm việc thực tế, thời gian tính công và mức chi trả</p>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+            <span style={{ 
+              background: '#4f46e5', 
+              color: '#fff', 
+              fontSize: 11, 
+              fontWeight: 800, 
+              padding: '2px 8px', 
+              borderRadius: 4, 
+              letterSpacing: 0.5 
+            }}>
+              VBE AGENCY
+            </span>
+            <h1 style={{ fontSize: 24, fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>
+              Bảng Công & Tính Lương Tự Động
+            </h1>
+          </div>
+          <p style={{ color: 'var(--text-secondary)', fontSize: 13 }}>
+            Quy chế: Ca làm việc <strong>09:30 - 18:30 (9h/ngày)</strong> • Chuẩn <strong>23 ngày công/tháng</strong> • Website: www.vbe.com.vn
+          </p>
         </div>
 
         <div className="month-selector">
-          <span style={{ fontSize: 13, color: 'var(--text-secondary)', fontWeight: 500 }}>Chọn kỳ lương:</span>
+          <span style={{ fontSize: 13, color: 'var(--text-secondary)', fontWeight: 500 }}>Kỳ lương:</span>
           <select 
             className="month-select"
             value={selectedMonth}
@@ -432,6 +482,11 @@ export const SalaryManager: React.FC = () => {
               <option key={opt.val} value={opt.val}>{opt.label}</option>
             ))}
           </select>
+
+          <button onClick={() => window.print()} className="print-btn" title="In hoặc lưu file PDF">
+            <Printer size={15} />
+            In / Xuất bảng công
+          </button>
         </div>
       </div>
 

@@ -391,7 +391,7 @@ export const DepartmentManager: React.FC = () => {
       <div className="header-row">
         <div>
           <h1 style={{ fontSize: 24, fontWeight: 700, color: 'var(--text-primary)' }}>Phòng Ban & Nhân Sự</h1>
-          <p style={{ color: 'var(--text-secondary)', fontSize: 14 }}>Xem sơ đồ phân chia bộ phận và chức vụ của agency</p>
+          <p style={{ color: 'var(--text-secondary)', fontSize: 14 }}>Sơ đồ phân chia bộ phận và danh sách nhân sự VBE Agency</p>
         </div>
  
         {user?.role === 'Admin' && (
@@ -548,7 +548,7 @@ export const DepartmentManager: React.FC = () => {
               </div>
               <div className="form-group">
                 <label>Địa chỉ Email</label>
-                <input required type="email" placeholder="nva@agency.com" value={userEmail} onChange={e => setUserEmail(e.target.value)} />
+                <input required type="email" placeholder="nhansu@vbe.com.vn" value={userEmail} onChange={e => setUserEmail(e.target.value)} />
               </div>
               <div className="form-group">
                 <label>Mật khẩu {editingUser && '(để trống nếu không đổi)'}</label>

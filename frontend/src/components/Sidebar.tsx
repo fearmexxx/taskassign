@@ -8,7 +8,8 @@ import {
   FileSpreadsheet, 
   LogOut, 
   User,
-  Wallet
+  Wallet,
+  Globe
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -192,8 +193,11 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, isChe
 
       <div>
         <div className="sidebar-brand">
-          <div className="brand-icon">T</div>
-          <span className="brand-text">TaskAssign Pro</span>
+          <div className="brand-icon" style={{ fontSize: 13, letterSpacing: -0.5, fontWeight: 900 }}>VBE</div>
+          <div>
+            <span className="brand-text">VBE Agency</span>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 500 }}>Chấm công & ERP</div>
+          </div>
         </div>
 
         <div className="profile-card">
@@ -260,10 +264,36 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, isChe
         </nav>
       </div>
 
-      <button className="logout-btn" onClick={logout}>
-        <LogOut className="menu-item-icon" />
-        <span>Đăng xuất</span>
-      </button>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 'auto' }}>
+        <a 
+          href="https://www.vbe.com.vn" 
+          target="_blank" 
+          rel="noreferrer"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            fontSize: 12,
+            color: 'var(--text-muted)',
+            textDecoration: 'none',
+            padding: '8px 12px',
+            borderRadius: 8,
+            background: 'rgba(255, 255, 255, 0.02)',
+            border: '1px solid rgba(255, 255, 255, 0.05)',
+            transition: 'var(--transition-smooth)'
+          }}
+          onMouseOver={e => (e.currentTarget.style.color = 'var(--accent-cyan)')}
+          onMouseOut={e => (e.currentTarget.style.color = 'var(--text-muted)')}
+        >
+          <Globe size={14} />
+          <span>www.vbe.com.vn</span>
+        </a>
+
+        <button className="logout-btn" onClick={logout} style={{ marginTop: 0 }}>
+          <LogOut className="menu-item-icon" />
+          <span>Đăng xuất</span>
+        </button>
+      </div>
     </aside>
   );
 };

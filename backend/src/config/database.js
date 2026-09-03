@@ -312,16 +312,16 @@ const initDatabase = () => {
 
             // Insert Users (Passwords are all '123456')
             const users = [
-              ['Alice Smith', 'alice@agency.com', '123456', 'Admin', 1, 15000000],
-              ['Bob Jones', 'bob@agency.com', '123456', 'Lead', 2, 12000000],
-              ['Charlie Brown', 'charlie@agency.com', '123456', 'Member', 2, 8000000],
-              ['Diana Prince', 'diana@agency.com', '123456', 'Lead', 3, 13000000],
-              ['Ethan Hunt', 'ethan@agency.com', '123456', 'Member', 3, 9500000],
-              ['Fiona Gallagher', 'fiona@agency.com', '123456', 'Lead', 4, 11000000],
-              ['George Clark', 'george@agency.com', '123456', 'Member', 4, 8500000],
-              ['Hannah Abbott', 'hannah@agency.com', '123456', 'Member', 2, 8000000],
-              ['Ian Malcolm', 'ian@agency.com', '123456', 'Member', 3, 9000000],
-              ['Julia Roberts', 'julia@agency.com', '123456', 'Member', 4, 8000000]
+              ['Alice Smith', 'alice@vbe.com.vn', '123456', 'Admin', 1, 15000000],
+              ['Bob Jones', 'bob@vbe.com.vn', '123456', 'Lead', 2, 12000000],
+              ['Charlie Brown', 'charlie@vbe.com.vn', '123456', 'Member', 2, 8000000],
+              ['Diana Prince', 'diana@vbe.com.vn', '123456', 'Lead', 3, 13000000],
+              ['Ethan Hunt', 'ethan@vbe.com.vn', '123456', 'Member', 3, 9500000],
+              ['Fiona Gallagher', 'fiona@vbe.com.vn', '123456', 'Lead', 4, 11000000],
+              ['George Clark', 'george@vbe.com.vn', '123456', 'Member', 4, 8500000],
+              ['Hannah Abbott', 'hannah@vbe.com.vn', '123456', 'Member', 2, 8000000],
+              ['Ian Malcolm', 'ian@vbe.com.vn', '123456', 'Member', 3, 9000000],
+              ['Julia Roberts', 'julia@vbe.com.vn', '123456', 'Member', 4, 8000000]
             ];
 
             const stmtUser = db.prepare("INSERT INTO users (name, email, password, role, department_id, base_salary) VALUES (?, ?, ?, ?, ?, ?)");

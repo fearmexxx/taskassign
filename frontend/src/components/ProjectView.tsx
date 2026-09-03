@@ -644,7 +644,7 @@ export const ProjectView: React.FC = () => {
       {/* SIDEBAR DỰ ÁN */}
       <div className="project-sidebar">
         <div className="sidebar-header">
-          <h3 style={{ fontSize: 16, fontWeight: 700 }}>Dự Án Agency</h3>
+          <h3 style={{ fontSize: 16, fontWeight: 700 }}>Dự Án VBE Agency</h3>
           {(user?.role === 'Admin' || user?.role === 'Lead') && (
             <button className="btn-outline" style={{ padding: '6px 10px', display: 'flex', alignItems: 'center', gap: 4 }} onClick={() => setShowAddProject(true)}>
               <Plus size={14} /> Dự án

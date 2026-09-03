@@ -35,21 +35,39 @@ interface AttendanceToday {
   status: 'Present' | 'Late' | 'Absent' | null;
 }
 
-interface TeamStatus {
-  user_name: string;
+interface TeamMemberToday {
+  id: number;
+  name: string;
+  email: string;
+  role: string;
   department_name: string;
-  check_in: string;
-  status: string;
+  check_in: string | null;
+  check_out: string | null;
+  attendance_status: string | null;
 }
 
 export const Dashboard: React.FC<DashboardProps> = ({ onCheckInChange, setActiveTab }) => {
   const { user, fetchWithAuth } = useAuth();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [attendance, setAttendance] = useState<AttendanceToday>({ check_in: null, check_out: null, status: null });
-  const [teamLogs, setTeamLogs] = useState<TeamStatus[]>([]);
+  const [teamToday, setTeamToday] = useState<TeamMemberToday[]>([]);
+  const [currentTime, setCurrentTime] = useState<string>('');
   const [reportText, setReportText] = useState('');
   const [reportSubmitted, setReportSubmitted] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+
+  // Đồng hồ thời gian thực chuẩn giờ Việt Nam (GMT+7)
+  useEffect(() => {
+    const updateClock = () => {
+      const now = new Date();
+      const time = now.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      const date = now.toLocaleDateString('vi-VN', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' });
+      setCurrentTime(`${time} • ${date}`);
+    };
+    updateClock();
+    const timer = setInterval(updateClock, 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   const fetchDashboardData = async () => {
     try {
@@ -66,12 +84,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ onCheckInChange, setActive
         setTasks(tasksData);
       }
 
-      const teamRes = await fetchWithAuth('/api/attendance/admin-logs');
+      const teamRes = await fetchWithAuth('/api/attendance/today-team');
       if (teamRes.ok) {
         const teamData = await teamRes.json();
-        const todayStr = new Date().toISOString().split('T')[0];
-        const todayLogs = teamData.filter((log: any) => log.date === todayStr);
-        setTeamLogs(todayLogs);
+        setTeamToday(teamData);
       }
     } catch (e) {
       console.error("Error loading dashboard data", e);
@@ -494,8 +510,24 @@ export const Dashboard: React.FC<DashboardProps> = ({ onCheckInChange, setActive
 
       <div className="header-section">
         <div>
-          <h1 className="header-title">Chào mừng trở lại, {user?.name}</h1>
-          <p className="header-subtitle">Hệ thống ERP • Hôm nay là {new Date().toLocaleDateString('vi-VN', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
+            <span style={{ 
+              background: '#4f46e5', 
+              color: '#fff', 
+              fontSize: 11, 
+              fontWeight: 800, 
+              padding: '2px 8px', 
+              borderRadius: 4, 
+              letterSpacing: 0.5 
+            }}>
+              VBE AGENCY
+            </span>
+            <h1 className="header-title" style={{ margin: 0 }}>Chào mừng trở lại, {user?.name}</h1>
+          </div>
+          <p className="header-subtitle">
+            {currentTime || `Hôm nay là ${new Date().toLocaleDateString('vi-VN', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}`}
+            {' • '}Ca chuẩn: <strong>09:30 - 18:30 (9.0h)</strong>
+          </p>
         </div>
       </div>
 
@@ -536,8 +568,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ onCheckInChange, setActive
             <Users size={22} />
           </div>
           <div className="metric-info">
-            <span className="metric-value">{teamLogs.length} / 10</span>
-            <span className="metric-label">Đã chấm công hôm nay</span>
+            <span className="metric-value">{teamToday.filter(m => m.check_in !== null).length} / {teamToday.length || 10}</span>
+            <span className="metric-label">Đã vào ca hôm nay</span>
           </div>
         </div>
       </div>
@@ -647,34 +679,109 @@ export const Dashboard: React.FC<DashboardProps> = ({ onCheckInChange, setActive
           </div>
         </div>
 
-        {/* CỘT PHẢI: THÀNH VIÊN ĐÃ ĐI LÀM HÔM NAY */}
+        {/* CỘT PHẢI: ĐIỂM DIỆN ĐỘI NGŨ VBE AGENCY HÔM NAY */}
         <div>
           <div className="section-panel glass-panel" style={{ height: '100%' }}>
-            <h3 className="panel-title">
-              <Users size={20} />
-              Nhân sự đã check-in
-            </h3>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+              <h3 className="panel-title" style={{ margin: 0 }}>
+                <Users size={20} className="text-cyan-400" />
+                Điểm diện Đội ngũ VBE
+              </h3>
+              <span style={{ 
+                fontSize: 12, 
+                fontWeight: 600, 
+                background: 'rgba(79, 70, 229, 0.1)', 
+                color: '#4f46e5', 
+                padding: '3px 8px', 
+                borderRadius: 12 
+              }}>
+                {teamToday.filter(m => m.check_in !== null).length} / {teamToday.length} có mặt
+              </span>
+            </div>
+
+            <div style={{ 
+              background: '#f8f9fa', 
+              padding: '8px 12px', 
+              borderRadius: 8, 
+              fontSize: 12, 
+              color: 'var(--text-secondary)', 
+              marginBottom: 16,
+              display: 'flex',
+              justifyContent: 'space-between'
+            }}>
+              <span>Ca chuẩn: <strong>09:30 - 18:30</strong></span>
+              <span>Sau 09:30 tính đi trễ</span>
+            </div>
             
-            {teamLogs.length === 0 ? (
-              <p style={{ color: 'var(--text-secondary)', fontSize: 13 }}>Chưa có nhân viên nào check-in hôm nay.</p>
+            {teamToday.length === 0 ? (
+              <p style={{ color: 'var(--text-secondary)', fontSize: 13 }}>Đang tải danh sách nhân sự...</p>
             ) : (
-              <div className="team-grid">
-                {teamLogs.map((log, idx) => (
-                  <div key={idx} className="team-member-row">
-                    <div className="member-main">
-                      <div className="member-avatar-small">
-                        {log.user_name.split(' ').map(n => n[0]).join('')}
+              <div className="team-grid" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {teamToday.map((member) => {
+                  const isCheckedIn = !!member.check_in;
+                  const isLate = member.attendance_status === 'Late';
+                  return (
+                    <div key={member.id} className="team-member-row" style={{ 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      justifyContent: 'space-between',
+                      padding: '8px 10px',
+                      borderRadius: 8,
+                      background: isCheckedIn ? '#ffffff' : '#fafafa',
+                      border: '1px solid var(--border-color)'
+                    }}>
+                      <div className="member-main" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <div className="member-avatar-small" style={{
+                          width: 32,
+                          height: 32,
+                          borderRadius: '50%',
+                          background: isCheckedIn ? '#4f46e5' : '#94a3b8',
+                          color: '#fff',
+                          fontSize: 11,
+                          fontWeight: 700,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center'
+                        }}>
+                          {member.name.split(' ').map(n => n[0]).join('').slice(-2)}
+                        </div>
+                        <div className="member-text">
+                          <span className="member-name" style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{member.name}</span>
+                          <span className="member-dept" style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                            {translateDept(member.department_name || '')}
+                            {isCheckedIn ? ` • Vào lúc ${member.check_in}` : ' • Chưa vào ca'}
+                          </span>
+                        </div>
                       </div>
-                      <div className="member-text">
-                        <span className="member-name">{log.user_name}</span>
-                        <span className="member-dept">{translateDept(log.department_name)} • {log.check_in}</span>
+
+                      <div>
+                        {isCheckedIn ? (
+                          <span style={{
+                            fontSize: 10,
+                            padding: '3px 8px',
+                            borderRadius: 12,
+                            fontWeight: 600,
+                            background: isLate ? 'rgba(245, 158, 11, 0.1)' : 'rgba(16, 185, 129, 0.1)',
+                            color: isLate ? '#d97706' : '#10b981'
+                          }}>
+                            {isLate ? 'Đi trễ' : 'Đúng giờ'}
+                          </span>
+                        ) : (
+                          <span style={{
+                            fontSize: 10,
+                            padding: '3px 8px',
+                            borderRadius: 12,
+                            fontWeight: 500,
+                            background: '#f1f5f9',
+                            color: '#64748b'
+                          }}>
+                            Chưa vào ca
+                          </span>
+                        )}
                       </div>
                     </div>
-                    <span className={`checkin-badge badge-${log.status}`}>
-                      {translateAttStatus(log.status)}
-                    </span>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>

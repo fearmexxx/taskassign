@@ -161,11 +161,11 @@ export const Login: React.FC = () => {
       `}</style>
 
       <div className="login-card glass-panel">
-        <div className="logo-container">
-          <Shield className="text-black" size={28} />
+        <div className="logo-container" style={{ fontWeight: 900, fontSize: 20, color: '#fff', letterSpacing: -0.5 }}>
+          VBE
         </div>
-        <h2 className="login-title">TaskAssign Pro</h2>
-        <p className="login-subtitle">Hệ thống ERP & Quản lý Công việc</p>
+        <h2 className="login-title">VBE Agency</h2>
+        <p className="login-subtitle">Hệ thống Quản lý Công việc & Chấm công Nội bộ</p>
 
         {error && <div className="error-banner">{error}</div>}
 
@@ -178,7 +178,7 @@ export const Login: React.FC = () => {
                 type="email"
                 required
                 className="login-input"
-                placeholder="ten@agency.com"
+                placeholder="nhanvien@vbe.com.vn"
                 value={email}
                 onChange={e => setEmail(e.target.value)}
               />
@@ -186,7 +186,7 @@ export const Login: React.FC = () => {
           </div>
 
           <div className="input-group">
-            <label className="input-label">Mật khẩu</label>
+            <label className="input-label">Mật khẩu (Mặc định: 123456)</label>
             <div className="input-wrapper">
               <KeyRound className="input-icon" />
               <input
@@ -207,24 +207,28 @@ export const Login: React.FC = () => {
 
         <h4 className="quick-accounts-title">Chọn nhanh tài khoản Demo</h4>
         <div className="quick-accounts-grid">
-          <button onClick={() => handleSelectQuickAccount('alice@agency.com')} className="quick-acc-btn">
+          <button onClick={() => handleSelectQuickAccount('alice@vbe.com.vn')} className="quick-acc-btn">
             Alice (Quản trị viên)
           </button>
-          <button onClick={() => handleSelectQuickAccount('bob@agency.com')} className="quick-acc-btn">
+          <button onClick={() => handleSelectQuickAccount('bob@vbe.com.vn')} className="quick-acc-btn">
             Bob (Trưởng phòng Dev)
           </button>
-          <button onClick={() => handleSelectQuickAccount('charlie@agency.com')} className="quick-acc-btn">
+          <button onClick={() => handleSelectQuickAccount('charlie@vbe.com.vn')} className="quick-acc-btn">
             Charlie (Nhân viên Dev)
           </button>
-          <button onClick={() => handleSelectQuickAccount('diana@agency.com')} className="quick-acc-btn">
+          <button onClick={() => handleSelectQuickAccount('diana@vbe.com.vn')} className="quick-acc-btn">
             Diana (Trưởng phòng Design)
           </button>
-          <button onClick={() => handleSelectQuickAccount('fiona@agency.com')} className="quick-acc-btn">
+          <button onClick={() => handleSelectQuickAccount('fiona@vbe.com.vn')} className="quick-acc-btn">
             Fiona (Trưởng phòng Mktg)
           </button>
-          <button onClick={() => handleSelectQuickAccount('george@agency.com')} className="quick-acc-btn">
+          <button onClick={() => handleSelectQuickAccount('george@vbe.com.vn')} className="quick-acc-btn">
             George (Nhân viên Mktg)
           </button>
+        </div>
+
+        <div style={{ marginTop: 24, fontSize: 12, color: 'var(--text-muted)' }}>
+          Cổng thông tin nội bộ: <a href="https://www.vbe.com.vn" target="_blank" rel="noreferrer" style={{ color: '#4f46e5', textDecoration: 'none', fontWeight: 600 }}>www.vbe.com.vn</a>
         </div>
       </div>
     </div>
