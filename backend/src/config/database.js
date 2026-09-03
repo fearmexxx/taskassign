@@ -288,6 +288,19 @@ const initDatabase = () => {
         });
       })
       .then(() => {
+        // Tự động chuyển đổi các email @agency.com cũ sang @vbe.com.vn trên database Neon
+        return new Promise((res) => {
+          db.run(`UPDATE users SET email = REPLACE(email, '@agency.com', '@vbe.com.vn') WHERE email LIKE '%@agency.com'`, (err) => {
+            if (err) {
+              console.warn("Notice: Email migration to @vbe.com.vn:", err.message);
+            } else {
+              console.log("Database: Migrated all user emails to @vbe.com.vn");
+            }
+            res();
+          });
+        });
+      })
+      .then(() => {
         // Seed standard data if users are empty
         db.get("SELECT COUNT(*) as count FROM users", (err, row) => {
           if (err) {

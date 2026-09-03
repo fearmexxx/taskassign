@@ -96,17 +96,28 @@ app.post('/api/auth/login', (req, res) => {
     return res.status(400).json({ error: 'Email và mật khẩu không được bỏ trống' });
   }
 
+  const cleanEmail = email.trim().toLowerCase();
+  const cleanPassword = password.toString().trim();
+
+  // Tạo email thay thế tương ứng để hỗ trợ cả 2 domain @vbe.com.vn và @agency.com
+  let altEmail = cleanEmail;
+  if (cleanEmail.endsWith('@vbe.com.vn')) {
+    altEmail = cleanEmail.replace('@vbe.com.vn', '@agency.com');
+  } else if (cleanEmail.endsWith('@agency.com')) {
+    altEmail = cleanEmail.replace('@agency.com', '@vbe.com.vn');
+  }
+
   db.get(
     `SELECT u.*, d.name as department_name 
      FROM users u 
      LEFT JOIN departments d ON u.department_id = d.id 
-     WHERE u.email = ?`,
-    [email],
+     WHERE LOWER(u.email) = ? OR LOWER(u.email) = ?`,
+    [cleanEmail, altEmail],
     (err, user) => {
       if (err) {
         return res.status(500).json({ error: err.message });
       }
-      if (!user || user.password !== password) {
+      if (!user || user.password !== cleanPassword) {
         return res.status(401).json({ error: 'Email hoặc mật khẩu không chính xác' });
       }
 
