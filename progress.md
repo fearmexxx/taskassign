@@ -95,6 +95,23 @@ This log tracks the build history, feature additions, styling changes, and deplo
   - Tự động gắn cờ `check_in_location_type` (`Office` vs `Remote`).
   - Danh sách "Điểm diện Đội ngũ VBE Hôm nay" và bảng chi tiết chấm công hiển thị huy hiệu tím `Ngoài VP (5.3km)` kèm lý do và địa chỉ để Admin/Quản lý giám sát 100% minh bạch.
 
+### Phase 10: Sửa Lỗi Bể Giao Diện & Tối Ưu Hóa Tỉ Lệ Co Giãn (Scale) Cho Mobile
+- **Nguyên nhân cốt lõi**:
+  - Các thành phần trang (`Dashboard`, `ProjectView`, `SalaryManager`, `CalendarView`, `DepartmentManager`) sử dụng thẻ `<style>` nội bộ chứa các lưới cố định nhiều cột (`grid-template-columns: repeat(4, 1fr)`, `3fr 1fr`, `280px 1fr`) và padding cố định `32px` đã ghi đè CSS media query bên ngoài.
+- **Biện pháp khắc phục triệt để**:
+  - **Khóa tràn ngang (Zero horizontal overflow)**: Thêm `max-width: 100vw`, `overflow-x: hidden`, `width: 100%` vào toàn bộ layout và body.
+  - **Tối ưu Dashboard trên Mobile**:
+    - Chuyển `main-dashboard-grid` thành 1 cột duy nhất.
+    - Giảm padding từ 32px xuống 14px 12px, đảm bảo nội dung vừa khít màn hình 375px–430px.
+    - Chuyển widget chấm công từ dàn ngang thành dàn dọc (full-width button), thao tác chạm ngón cái cực kỳ êm ái.
+    - Thu nhỏ các thẻ chỉ số (Metrics) với icon 36px và bố cục 2 cột cân đối.
+  - **Tối ưu Kanban Board (ProjectView)**:
+    - Biến 4 cột việc (Todo, InProgress, Review, Done) thành dạng trượt ngang mượt mà (Horizontal Swipe) với hiệu ứng `scroll-snap-type: x mandatory`, mỗi cột rộng `82vw`.
+    - Danh sách dự án trên mobile chuyển thành thanh thẻ trượt ngang gọn gàng.
+  - **Tối ưu Bảng Lương, Lịch & Phòng Ban**:
+    - Các bảng dữ liệu nhiều cột được bọc trong container cuộn ngang riêng biệt (`overflow-x: auto; -webkit-overflow-scrolling: touch`), không bao giờ làm vỡ khung màn hình điện thoại.
+    - Thêm khoảng đệm an toàn `padding-bottom: 74px` và hỗ trợ `env(safe-area-inset-bottom)` cho iPhone có thanh Home Indicator.
+
 ---
 
 ## 🚀 Deployment Plan (Vercel + Neon + Render)
