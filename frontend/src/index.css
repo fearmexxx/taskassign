@@ -121,10 +121,19 @@ body {
 
 /* --- MOBILE RESPONSIVE OPTIMIZATIONS (≤ 768px) --- */
 @media (max-width: 768px) {
+  html, body {
+    width: 100% !important;
+    max-width: 100vw !important;
+    overflow-x: hidden !important;
+    -webkit-text-size-adjust: 100%;
+  }
+
   .app-container {
     flex-direction: column !important;
     height: 100vh !important;
-    width: 100vw !important;
+    height: 100dvh !important;
+    width: 100% !important;
+    max-width: 100vw !important;
     overflow: hidden !important;
   }
 
@@ -134,57 +143,277 @@ body {
 
   .mobile-top-bar {
     display: flex !important;
+    flex-shrink: 0 !important;
   }
 
   .mobile-bottom-nav {
     display: flex !important;
+    flex-shrink: 0 !important;
+    padding-bottom: env(safe-area-inset-bottom, 0px) !important;
   }
 
   .main-content-wrapper {
-    padding-bottom: 72px !important;
+    flex: 1 !important;
+    width: 100% !important;
+    max-width: 100vw !important;
     overflow-y: auto !important;
+    overflow-x: hidden !important;
+    padding-bottom: 74px !important;
     -webkit-overflow-scrolling: touch;
   }
 
-  .metrics-grid {
-    grid-template-columns: 1fr 1fr !important;
-    gap: 10px !important;
-    margin-bottom: 16px !important;
-  }
-
-  .metric-card {
-    padding: 12px 14px !important;
-  }
-
-  .metric-value {
-    font-size: 18px !important;
-  }
-
-  .metric-label {
-    font-size: 11px !important;
-  }
-
-  .main-dashboard-grid {
-    grid-template-columns: 1fr !important;
-    gap: 16px !important;
-  }
-
-  .dashboard-container, .salary-page, .project-view, .calendar-view, .reports-container, .dept-container {
+  /* Content containers */
+  .dashboard-content, 
+  .salary-page, 
+  .project-view-container, 
+  .calendar-container, 
+  .reports-content, 
+  .reports-container, 
+  .dept-container {
     padding: 14px 12px !important;
+    width: 100% !important;
+    max-width: 100vw !important;
+    box-sizing: border-box !important;
+    overflow-x: hidden !important;
   }
 
-  .header-section {
+  /* Headers */
+  .header-section, 
+  .salary-header-section, 
+  .header-row {
+    flex-direction: column !important;
+    align-items: flex-start !important;
     margin-bottom: 14px !important;
+    gap: 10px !important;
   }
 
   .header-title {
-    font-size: 20px !important;
+    font-size: 19px !important;
+    line-height: 1.3 !important;
+    word-break: break-word !important;
   }
 
   .header-subtitle {
     font-size: 12px !important;
+    line-height: 1.4 !important;
   }
 
+  /* Metrics Grid (2 columns on mobile) */
+  .metrics-grid {
+    grid-template-columns: 1fr 1fr !important;
+    gap: 8px !important;
+    margin-bottom: 14px !important;
+  }
+
+  .metric-card {
+    padding: 10px 12px !important;
+    gap: 8px !important;
+    border-radius: 8px !important;
+  }
+
+  .metric-icon-box {
+    width: 36px !important;
+    height: 36px !important;
+    border-radius: 8px !important;
+    flex-shrink: 0 !important;
+  }
+
+  .metric-value {
+    font-size: 18px !important;
+    margin-bottom: 2px !important;
+  }
+
+  .metric-label {
+    font-size: 10px !important;
+    letter-spacing: normal !important;
+  }
+
+  /* Main Grids */
+  .main-dashboard-grid {
+    grid-template-columns: 1fr !important;
+    gap: 14px !important;
+  }
+
+  .section-panel {
+    padding: 14px !important;
+    margin-bottom: 14px !important;
+    border-radius: 10px !important;
+  }
+
+  .panel-title {
+    font-size: 16px !important;
+    margin-bottom: 14px !important;
+  }
+
+  /* Check-in Widget */
+  .checkin-widget {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    padding: 14px !important;
+    gap: 12px !important;
+    border-radius: 10px !important;
+  }
+
+  .checkin-time-info {
+    text-align: center !important;
+    align-items: center !important;
+    gap: 4px !important;
+  }
+
+  .checkin-time-value {
+    font-size: 15px !important;
+  }
+
+  .checkin-actions {
+    width: 100% !important;
+    flex-direction: column !important;
+    gap: 8px !important;
+  }
+
+  .checkin-btn {
+    width: 100% !important;
+    padding: 12px !important;
+    font-size: 14px !important;
+    justify-content: center !important;
+  }
+
+  /* Tasks & Team rows */
+  .task-item {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 10px !important;
+    padding: 12px !important;
+  }
+
+  .task-main {
+    width: 100% !important;
+  }
+
+  .task-meta {
+    flex-wrap: wrap !important;
+    gap: 6px !important;
+    font-size: 11px !important;
+  }
+
+  .team-member-row {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 8px !important;
+    padding: 10px !important;
+  }
+
+  /* Project View */
+  .project-view-container {
+    display: flex !important;
+    flex-direction: column !important;
+    height: auto !important;
+    overflow-y: auto !important;
+  }
+
+  .project-sidebar {
+    border-right: none !important;
+    border-bottom: 1px solid var(--border-color) !important;
+    padding: 12px !important;
+    max-height: none !important;
+  }
+
+  .project-list {
+    display: flex !important;
+    flex-direction: row !important;
+    overflow-x: auto !important;
+    gap: 8px !important;
+    padding-bottom: 6px !important;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .project-item {
+    min-width: 160px !important;
+    flex-shrink: 0 !important;
+    padding: 10px 12px !important;
+  }
+
+  .project-details-area {
+    padding: 12px !important;
+    overflow-x: hidden !important;
+  }
+
+  .details-header {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 12px !important;
+  }
+
+  .proj-roles-bar {
+    flex-direction: column !important;
+    gap: 6px !important;
+  }
+
+  .board-grid {
+    display: flex !important;
+    overflow-x: auto !important;
+    gap: 12px !important;
+    padding: 4px 0 20px 0 !important;
+    -webkit-overflow-scrolling: touch;
+    scroll-snap-type: x mandatory;
+  }
+
+  .board-column {
+    min-width: 270px !important;
+    width: 82vw !important;
+    flex-shrink: 0 !important;
+    scroll-snap-align: start;
+  }
+
+  /* Salary & Payments */
+  .payslip-summary-row, 
+  .mgmt-summary-row {
+    grid-template-columns: 1fr !important;
+    gap: 10px !important;
+  }
+
+  .table-card, 
+  .logs-card {
+    padding: 12px !important;
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Calendar */
+  .calendar-container {
+    display: flex !important;
+    flex-direction: column !important;
+    height: auto !important;
+    overflow-y: auto !important;
+  }
+
+  .calendar-main-panel {
+    padding: 12px 6px !important;
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .calendar-grid {
+    grid-auto-rows: 65px !important;
+    min-width: 310px !important;
+    gap: 4px !important;
+  }
+
+  .weekday-labels {
+    min-width: 310px !important;
+    font-size: 10px !important;
+  }
+
+  /* Departments */
+  .dept-grid {
+    grid-template-columns: 1fr !important;
+    gap: 12px !important;
+  }
+
+  .dept-card {
+    padding: 14px !important;
+  }
+
+  /* Login Card */
   .login-card {
     width: 92vw !important;
     padding: 24px 16px !important;

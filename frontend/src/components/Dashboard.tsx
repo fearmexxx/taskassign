@@ -668,6 +668,121 @@ export const Dashboard: React.FC<DashboardProps> = ({ onCheckInChange, setActive
         }
         .badge-Present { background: rgba(39, 174, 96, 0.1); color: var(--accent-green); }
         .badge-Late { background: rgba(255, 165, 0, 0.1); color: orange; }
+
+        /* Mobile specific overrides */
+        @media (max-width: 768px) {
+          .dashboard-content {
+            padding: 14px 12px 80px 12px !important;
+            width: 100% !important;
+            max-width: 100vw !important;
+            box-sizing: border-box !important;
+          }
+          .header-section {
+            flex-direction: column !important;
+            align-items: flex-start !important;
+            margin-bottom: 14px !important;
+            gap: 8px !important;
+          }
+          .header-title {
+            font-size: 19px !important;
+            line-height: 1.3 !important;
+            word-break: break-word !important;
+          }
+          .header-subtitle {
+            font-size: 12px !important;
+            line-height: 1.4 !important;
+          }
+          .metrics-grid {
+            grid-template-columns: 1fr 1fr !important;
+            gap: 8px !important;
+            margin-bottom: 14px !important;
+          }
+          .metric-card {
+            padding: 10px 12px !important;
+            gap: 8px !important;
+            border-radius: 8px !important;
+          }
+          .metric-icon-box {
+            width: 36px !important;
+            height: 36px !important;
+            border-radius: 8px !important;
+            flex-shrink: 0 !important;
+          }
+          .metric-value {
+            font-size: 18px !important;
+            margin-bottom: 2px !important;
+          }
+          .metric-label {
+            font-size: 10px !important;
+          }
+          .main-dashboard-grid {
+            grid-template-columns: 1fr !important;
+            gap: 14px !important;
+          }
+          .section-panel {
+            padding: 14px !important;
+            margin-bottom: 14px !important;
+            border-radius: 10px !important;
+          }
+          .panel-title {
+            font-size: 16px !important;
+            margin-bottom: 12px !important;
+          }
+          .checkin-widget {
+            flex-direction: column !important;
+            align-items: stretch !important;
+            padding: 14px !important;
+            gap: 12px !important;
+            border-radius: 10px !important;
+          }
+          .checkin-time-info {
+            text-align: center !important;
+            align-items: center !important;
+            gap: 4px !important;
+          }
+          .checkin-time-value {
+            font-size: 15px !important;
+          }
+          .checkin-actions {
+            width: 100% !important;
+            flex-direction: column !important;
+            gap: 8px !important;
+          }
+          .checkin-btn {
+            width: 100% !important;
+            padding: 12px !important;
+            font-size: 14px !important;
+            justify-content: center !important;
+          }
+          .task-item {
+            flex-direction: column !important;
+            align-items: flex-start !important;
+            gap: 10px !important;
+            padding: 12px !important;
+          }
+          .task-main {
+            width: 100% !important;
+          }
+          .task-meta {
+            flex-wrap: wrap !important;
+            gap: 6px !important;
+          }
+          .team-member-row {
+            flex-direction: column !important;
+            align-items: flex-start !important;
+            gap: 8px !important;
+            padding: 10px !important;
+          }
+          .team-member-row > div:last-child {
+            width: 100% !important;
+            align-items: flex-start !important;
+          }
+          .checkin-modal-body {
+            padding: 16px !important;
+            border-radius: 14px !important;
+            max-height: 85dvh !important;
+          }
+        }
       `}</style>
 
       <div className="header-section">
@@ -1019,7 +1134,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onCheckInChange, setActive
           zIndex: 1000,
           padding: 16
         }}>
-          <div style={{
+          <div className="checkin-modal-body" style={{
             background: '#ffffff',
             borderRadius: 16,
             width: '100%',

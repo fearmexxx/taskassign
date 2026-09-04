@@ -156,6 +156,26 @@ export const WorkReports: React.FC = () => {
           color: var(--text-primary);
           white-space: pre-wrap;
         }
+        @media (max-width: 768px) {
+          .reports-content {
+            padding: 14px 12px 80px 12px !important;
+          }
+          .header-section {
+            margin-bottom: 14px !important;
+          }
+          .header-section h1 {
+            font-size: 19px !important;
+          }
+          .filter-bar {
+            flex-direction: column !important;
+            align-items: stretch !important;
+            gap: 8px !important;
+            padding: 12px !important;
+          }
+          .report-feed-card {
+            padding: 14px !important;
+          }
+        }
       `}</style>
  
       <div className="header-section">

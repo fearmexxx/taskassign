@@ -456,6 +456,35 @@ export const SalaryManager: React.FC = () => {
           border-color: #4f46e5;
           color: #4f46e5;
         }
+        @media (max-width: 768px) {
+          .salary-page {
+            padding: 14px 12px 80px 12px !important;
+            width: 100% !important;
+            max-width: 100vw !important;
+            box-sizing: border-box !important;
+          }
+          .salary-header-section {
+            flex-direction: column !important;
+            align-items: flex-start !important;
+            gap: 12px !important;
+          }
+          .month-selector {
+            width: 100% !important;
+            justify-content: space-between !important;
+          }
+          .payslip-summary-row, .mgmt-summary-row {
+            grid-template-columns: 1fr !important;
+            gap: 10px !important;
+          }
+          .table-card, .logs-card {
+            padding: 12px !important;
+            overflow-x: auto !important;
+            -webkit-overflow-scrolling: touch;
+          }
+          .salary-table, .logs-table {
+            min-width: 540px !important;
+          }
+        }
         @media print {
           .month-selector, .sidebar, aside, .btn-neon, .btn-outline {
             display: none !important;

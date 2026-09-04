@@ -287,6 +287,38 @@ export const CalendarView: React.FC = () => {
           align-items: center;
           gap: 8px;
         }
+        @media (max-width: 768px) {
+          .calendar-container {
+            display: flex !important;
+            flex-direction: column !important;
+            padding: 12px 10px 80px 10px !important;
+            height: auto !important;
+            overflow-y: auto !important;
+          }
+          .calendar-main-panel {
+            padding: 12px 6px !important;
+            overflow-x: auto !important;
+            -webkit-overflow-scrolling: touch;
+          }
+          .month-title {
+            font-size: 17px !important;
+          }
+          .calendar-grid {
+            grid-auto-rows: 65px !important;
+            min-width: 310px !important;
+            gap: 4px !important;
+          }
+          .weekday-labels {
+            min-width: 310px !important;
+            font-size: 10px !important;
+          }
+          .day-num {
+            font-size: 11px !important;
+          }
+          .side-stats-panel {
+            padding: 14px !important;
+          }
+        }
       `}</style>
 
       {/* MAIN CALENDAR GRID */}

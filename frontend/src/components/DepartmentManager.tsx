@@ -386,6 +386,32 @@ export const DepartmentManager: React.FC = () => {
           outline: none;
           border-color: #4f46e5;
         }
+        @media (max-width: 768px) {
+          .dept-container {
+            padding: 14px 12px 80px 12px !important;
+            height: auto !important;
+          }
+          .header-row {
+            flex-direction: column !important;
+            align-items: flex-start !important;
+            gap: 12px !important;
+          }
+          .header-row h1 {
+            font-size: 20px !important;
+          }
+          .dept-grid {
+            grid-template-columns: 1fr !important;
+            gap: 12px !important;
+          }
+          .dept-card {
+            padding: 14px !important;
+          }
+          .modal-body {
+            width: 94vw !important;
+            padding: 16px !important;
+            max-height: 85dvh !important;
+          }
+        }
       `}</style>
  
       <div className="header-row">

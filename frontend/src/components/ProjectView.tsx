@@ -639,6 +639,71 @@ export const ProjectView: React.FC = () => {
           color: var(--text-secondary);
           cursor: pointer;
         }
+
+        @media (max-width: 768px) {
+          .project-view-container {
+            display: flex !important;
+            flex-direction: column !important;
+            height: auto !important;
+            overflow-y: auto !important;
+            padding-bottom: 74px !important;
+          }
+          .project-sidebar {
+            border-right: none !important;
+            border-bottom: 1px solid var(--border-color) !important;
+            padding: 12px !important;
+            max-height: none !important;
+          }
+          .project-list {
+            display: flex !important;
+            flex-direction: row !important;
+            overflow-x: auto !important;
+            gap: 8px !important;
+            padding-bottom: 6px !important;
+            -webkit-overflow-scrolling: touch;
+          }
+          .project-item {
+            min-width: 160px !important;
+            flex-shrink: 0 !important;
+            padding: 10px 12px !important;
+          }
+          .project-details-area {
+            padding: 12px !important;
+            overflow-x: hidden !important;
+          }
+          .details-header {
+            flex-direction: column !important;
+            align-items: stretch !important;
+            gap: 12px !important;
+          }
+          .proj-roles-bar {
+            flex-direction: column !important;
+            gap: 6px !important;
+          }
+          .board-grid {
+            display: flex !important;
+            overflow-x: auto !important;
+            gap: 12px !important;
+            padding: 4px 0 20px 0 !important;
+            -webkit-overflow-scrolling: touch;
+            scroll-snap-type: x mandatory;
+          }
+          .board-column {
+            min-width: 270px !important;
+            width: 82vw !important;
+            flex-shrink: 0 !important;
+            scroll-snap-align: start;
+          }
+          .modal-body {
+            width: 94vw !important;
+            padding: 16px !important;
+            max-height: 85dvh !important;
+          }
+          .form-row {
+            grid-template-columns: 1fr !important;
+            gap: 10px !important;
+          }
+        }
       `}</style>
 
       {/* SIDEBAR DỰ ÁN */}
