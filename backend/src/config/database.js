@@ -53,9 +53,16 @@ if (isPostgres) {
       const args = Array.isArray(realParams) ? realParams : (realParams ? [realParams] : []);
       
       // If it's an INSERT query and doesn't contain RETURNING, append RETURNING id to get lastID
+      // (Exclude composite primary key junction tables that don't have an 'id' column)
       let finalSql = pgSql;
       const isInsert = sql.trim().toUpperCase().startsWith('INSERT');
-      if (isInsert && !pgSql.toUpperCase().includes('RETURNING')) {
+      const normalizedSql = sql.toLowerCase();
+      const isJunctionTable = normalizedSql.includes('project_members') || 
+                              normalizedSql.includes('project_departments') || 
+                              normalizedSql.includes('task_members') || 
+                              normalizedSql.includes('task_departments');
+
+      if (isInsert && !isJunctionTable && !pgSql.toUpperCase().includes('RETURNING')) {
         finalSql = pgSql + ' RETURNING id';
       }
 

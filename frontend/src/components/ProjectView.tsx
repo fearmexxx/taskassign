@@ -142,9 +142,21 @@ export const ProjectView: React.FC = () => {
     setShowEditProject(true);
   };
 
+  const openAddProjectModal = () => {
+    resetProjectForm();
+    // If user is Lead, pre-select their department
+    if (user?.role === 'Lead' && user.department_id) {
+      setSelectedProjDepts([user.department_id]);
+    }
+    setShowAddProject(true);
+  };
+
   const handleAddProject = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newProjectName.trim()) return;
+    if (!newProjectName.trim()) {
+      alert('Vui lòng nhập tên dự án');
+      return;
+    }
 
     try {
       const res = await fetchWithAuth('/api/projects', {
@@ -155,7 +167,7 @@ export const ProjectView: React.FC = () => {
           start_date: newProjectStart,
           end_date: newProjectEnd,
           status: 'Active',
-          owner_id: newProjectOwner || null,
+          owner_id: newProjectOwner || user?.id || null,
           sub_owner_id: newProjectSubOwner || null,
           members: selectedProjMembers,
           departments: selectedProjDepts
@@ -166,9 +178,13 @@ export const ProjectView: React.FC = () => {
         resetProjectForm();
         setShowAddProject(false);
         loadData();
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        alert(errData.error || 'Thêm dự án thất bại. Vui lòng thử lại.');
       }
-    } catch (e) {
+    } catch (e: any) {
       console.error(e);
+      alert(e.message || 'Lỗi kết nối khi thêm dự án.');
     }
   };
 
@@ -195,9 +211,13 @@ export const ProjectView: React.FC = () => {
         resetProjectForm();
         setShowEditProject(false);
         loadData();
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        alert(errData.error || 'Cập nhật dự án thất bại.');
       }
-    } catch (e) {
+    } catch (e: any) {
       console.error(e);
+      alert(e.message || 'Lỗi kết nối khi cập nhật dự án.');
     }
   };
 
@@ -206,7 +226,7 @@ export const ProjectView: React.FC = () => {
     setNewProjectDesc('');
     setNewProjectStart('');
     setNewProjectEnd('');
-    setNewProjectOwner(team[0]?.id || 0);
+    setNewProjectOwner(user?.id || team[0]?.id || 0);
     setNewProjectSubOwner(0);
     setSelectedProjMembers([]);
     setSelectedProjDepts([]);
@@ -223,9 +243,13 @@ export const ProjectView: React.FC = () => {
           setSelectedProjectId(updated.length > 0 ? updated[0].id : null);
         }
         loadData();
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        alert(errData.error || 'Xóa dự án thất bại.');
       }
-    } catch (e) {
+    } catch (e: any) {
       console.error(e);
+      alert(e.message || 'Lỗi kết nối khi xóa dự án.');
     }
   };
 
@@ -259,9 +283,13 @@ export const ProjectView: React.FC = () => {
         setSelectedTaskDepts([]);
         setShowAddTask(false);
         loadData();
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        alert(errData.error || 'Tạo công việc thất bại.');
       }
-    } catch (e) {
+    } catch (e: any) {
       console.error(e);
+      alert(e.message || 'Lỗi kết nối khi tạo công việc.');
     }
   };
 
@@ -711,7 +739,7 @@ export const ProjectView: React.FC = () => {
         <div className="sidebar-header">
           <h3 style={{ fontSize: 16, fontWeight: 700 }}>Dự Án VBE Agency</h3>
           {(user?.role === 'Admin' || user?.role === 'Lead') && (
-            <button className="btn-outline" style={{ padding: '6px 10px', display: 'flex', alignItems: 'center', gap: 4 }} onClick={() => setShowAddProject(true)}>
+            <button className="btn-outline" style={{ padding: '6px 10px', display: 'flex', alignItems: 'center', gap: 4 }} onClick={openAddProjectModal}>
               <Plus size={14} /> Dự án
             </button>
           )}
@@ -779,8 +807,8 @@ export const ProjectView: React.FC = () => {
                 <button className="btn-neon" style={{ padding: '8px 16px', display: 'flex', alignItems: 'center', gap: 6 }} onClick={() => setShowAddTask(true)}>
                   <Plus size={16} /> Tạo Công Việc
                 </button>
-                {user?.role === 'Admin' && (
-                  <button className="btn-outline" style={{ borderColor: 'var(--accent-orange)', color: 'var(--accent-orange)', padding: '8px 12px' }} onClick={() => handleDeleteProject(activeProject.id)}>
+                {(user?.role === 'Admin' || (user?.role === 'Lead' && activeProject.owner_id === user?.id)) && (
+                  <button className="btn-outline" style={{ borderColor: 'var(--accent-orange)', color: 'var(--accent-orange)', padding: '8px 12px' }} onClick={() => handleDeleteProject(activeProject.id)} title="Xóa dự án">
                     <Trash2 size={16} />
                   </button>
                 )}
@@ -863,7 +891,7 @@ export const ProjectView: React.FC = () => {
       {showAddProject && (
         <div className="modal-overlay">
           <div className="modal-body glass-panel">
-            <h3 style={{ marginBottom: 20, color: '#fff' }}>Khởi tạo dự án mới</h3>
+            <h3 style={{ marginBottom: 20, color: 'var(--text-primary)' }}>Khởi tạo dự án mới</h3>
             <form onSubmit={handleAddProject}>
               <div className="form-group">
                 <label>Tên dự án</label>
@@ -944,7 +972,7 @@ export const ProjectView: React.FC = () => {
       {showEditProject && (
         <div className="modal-overlay">
           <div className="modal-body glass-panel">
-            <h3 style={{ marginBottom: 20, color: '#fff' }}>Thiết lập dự án</h3>
+            <h3 style={{ marginBottom: 20, color: 'var(--text-primary)' }}>Thiết lập dự án</h3>
             <form onSubmit={handleEditProjectSubmit}>
               <div className="form-group">
                 <label>Tên dự án</label>
@@ -1025,7 +1053,7 @@ export const ProjectView: React.FC = () => {
       {showAddTask && (
         <div className="modal-overlay">
           <div className="modal-body glass-panel">
-            <h3 style={{ marginBottom: 20, color: '#fff' }}>Giao công việc mới</h3>
+            <h3 style={{ marginBottom: 20, color: 'var(--text-primary)' }}>Giao công việc mới</h3>
             <form onSubmit={handleAddTask}>
               <div className="form-group">
                 <label>Tiêu đề công việc</label>

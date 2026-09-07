@@ -291,24 +291,46 @@ app.delete('/api/departments/:id', authenticateToken, requireRole(['Admin']), (r
 // --- PROJECT MANAGEMENT ---
 app.get('/api/projects', authenticateToken, async (req, res) => {
   try {
-    const projects = await dbAll(
-      `SELECT p.*, 
-              u1.name as owner_name,
-              u2.name as sub_owner_name,
-              COUNT(t.id) as total_tasks,
-              SUM(CASE WHEN t.status = 'Done' THEN 1 ELSE 0 END) as completed_tasks
-       FROM projects p
-       LEFT JOIN users u1 ON p.owner_id = u1.id
-       LEFT JOIN users u2 ON p.sub_owner_id = u2.id
-       LEFT JOIN tasks t ON t.project_id = p.id
-       WHERE ? = 'Admin' 
-          OR p.owner_id = ? 
-          OR p.sub_owner_id = ? 
-          OR p.id IN (SELECT project_id FROM project_members WHERE user_id = ?)
-          OR p.id IN (SELECT project_id FROM project_departments WHERE department_id = ?)
-       GROUP BY p.id`,
-      [req.user.role, req.user.id, req.user.id, req.user.id, req.user.department_id]
-    );
+    let query = `
+      SELECT p.*, 
+             u1.name as owner_name,
+             u2.name as sub_owner_name,
+             COUNT(t.id) as total_tasks,
+             SUM(CASE WHEN t.status = 'Done' THEN 1 ELSE 0 END) as completed_tasks
+      FROM projects p
+      LEFT JOIN users u1 ON p.owner_id = u1.id
+      LEFT JOIN users u2 ON p.sub_owner_id = u2.id
+      LEFT JOIN tasks t ON t.project_id = p.id
+    `;
+    const params = [];
+
+    if (req.user.role === 'Admin') {
+      // Admin sees all projects
+      query += ` GROUP BY p.id ORDER BY p.id DESC`;
+    } else if (req.user.role === 'Lead') {
+      // Lead sees projects where they are owner/sub_owner/member OR projects belonging to their department
+      query += `
+        WHERE p.owner_id = ? 
+           OR p.sub_owner_id = ? 
+           OR p.id IN (SELECT project_id FROM project_members WHERE user_id = ?)
+           OR p.id IN (SELECT project_id FROM project_departments WHERE department_id = ?)
+        GROUP BY p.id
+        ORDER BY p.id DESC
+      `;
+      params.push(req.user.id, req.user.id, req.user.id, req.user.department_id);
+    } else {
+      // Member ONLY sees projects where they are explicitly assigned (owner, sub_owner, or in project_members)
+      query += `
+        WHERE p.owner_id = ? 
+           OR p.sub_owner_id = ? 
+           OR p.id IN (SELECT project_id FROM project_members WHERE user_id = ?)
+        GROUP BY p.id
+        ORDER BY p.id DESC
+      `;
+      params.push(req.user.id, req.user.id, req.user.id);
+    }
+
+    const projects = await dbAll(query, params);
 
     // Fetch members and departments for each project
     for (let proj of projects) {
@@ -336,31 +358,36 @@ app.get('/api/projects', authenticateToken, async (req, res) => {
 });
 
 // Create project
-app.post('/api/projects', authenticateToken, async (req, res) => {
+app.post('/api/projects', authenticateToken, requireRole(['Admin', 'Lead']), async (req, res) => {
   const { name, description, status, start_date, end_date, owner_id, sub_owner_id, members, departments } = req.body;
   if (!name) return res.status(400).json({ error: 'Tên dự án là bắt buộc' });
 
   try {
+    const defaultOwnerId = owner_id || req.user.id;
     const result = await dbRun(
       `INSERT INTO projects (name, description, status, start_date, end_date, owner_id, sub_owner_id) 
        VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [name, description, status || 'Active', start_date, end_date, owner_id || null, sub_owner_id || null]
+      [name, description, status || 'Active', start_date, end_date, defaultOwnerId, sub_owner_id || null]
     );
 
     const projectId = result.lastID;
 
     // Save members mappings
-    if (Array.isArray(members)) {
+    if (Array.isArray(members) && members.length > 0) {
       for (let userId of members) {
         await dbRun(`INSERT INTO project_members (project_id, user_id) VALUES (?, ?)`, [projectId, userId]);
       }
     }
 
     // Save departments mappings
-    if (Array.isArray(departments)) {
-      for (let deptId of departments) {
-        await dbRun(`INSERT INTO project_departments (project_id, department_id) VALUES (?, ?)`, [projectId, deptId]);
-      }
+    let targetDepts = Array.isArray(departments) ? [...departments] : [];
+    // If user is Lead and no depts selected, automatically associate Lead's department
+    if (req.user.role === 'Lead' && targetDepts.length === 0 && req.user.department_id) {
+      targetDepts.push(req.user.department_id);
+    }
+
+    for (let deptId of targetDepts) {
+      await dbRun(`INSERT INTO project_departments (project_id, department_id) VALUES (?, ?)`, [projectId, deptId]);
     }
 
     res.status(201).json({ id: projectId, name, description, status: status || 'Active', start_date, end_date });
@@ -378,7 +405,18 @@ app.put('/api/projects/:id', authenticateToken, async (req, res) => {
     const project = await dbGet(`SELECT * FROM projects WHERE id = ?`, [projectId]);
     if (!project) return res.status(404).json({ error: 'Không tìm thấy dự án' });
 
-    if (req.user.role !== 'Admin' && project.owner_id !== req.user.id && project.sub_owner_id !== req.user.id) {
+    // Admin or Project Owner or Project Sub-Owner can edit
+    // Also Lead if project belongs to their department
+    let canEdit = req.user.role === 'Admin' || project.owner_id === req.user.id || project.sub_owner_id === req.user.id;
+    if (!canEdit && req.user.role === 'Lead' && req.user.department_id) {
+      const deptCheck = await dbGet(
+        `SELECT 1 FROM project_departments WHERE project_id = ? AND department_id = ?`,
+        [projectId, req.user.department_id]
+      );
+      if (deptCheck) canEdit = true;
+    }
+
+    if (!canEdit) {
       return res.status(403).json({ error: 'Bạn không có quyền chỉnh sửa thiết lập dự án này' });
     }
 
@@ -424,14 +462,32 @@ app.delete('/api/projects/:id', authenticateToken, requireRole(['Admin', 'Lead']
     const project = await dbGet(`SELECT * FROM projects WHERE id = ?`, [projectId]);
     if (!project) return res.status(404).json({ error: 'Không tìm thấy dự án' });
 
-    if (req.user.role !== 'Admin' && project.owner_id !== req.user.id && project.sub_owner_id !== req.user.id) {
+    // Lead can only delete projects where they are Owner or if belongs to their department
+    let canDelete = req.user.role === 'Admin' || project.owner_id === req.user.id;
+    if (!canDelete && req.user.role === 'Lead' && req.user.department_id) {
+      const deptCheck = await dbGet(
+        `SELECT 1 FROM project_departments WHERE project_id = ? AND department_id = ?`,
+        [projectId, req.user.department_id]
+      );
+      if (deptCheck) canDelete = true;
+    }
+
+    if (!canDelete) {
       return res.status(403).json({ error: 'Bạn không có quyền xóa dự án này' });
     }
 
-    db.run(`DELETE FROM projects WHERE id = ?`, [projectId], function(err) {
-      if (err) return res.status(500).json({ error: err.message });
-      res.json({ message: 'Dự án đã được xóa thành công' });
-    });
+    // Cascading cleanups to avoid any foreign key conflicts on PostgreSQL/SQLite
+    const projectTasks = await dbAll(`SELECT id FROM tasks WHERE project_id = ?`, [projectId]);
+    for (const t of projectTasks) {
+      await dbRun(`DELETE FROM task_members WHERE task_id = ?`, [t.id]);
+      await dbRun(`DELETE FROM task_departments WHERE task_id = ?`, [t.id]);
+    }
+    await dbRun(`DELETE FROM tasks WHERE project_id = ?`, [projectId]);
+    await dbRun(`DELETE FROM project_members WHERE project_id = ?`, [projectId]);
+    await dbRun(`DELETE FROM project_departments WHERE project_id = ?`, [projectId]);
+    await dbRun(`DELETE FROM projects WHERE id = ?`, [projectId]);
+
+    res.json({ message: 'Dự án đã được xóa thành công' });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -440,41 +496,75 @@ app.delete('/api/projects/:id', authenticateToken, requireRole(['Admin', 'Lead']
 // --- TASK MANAGEMENT ---
 app.get('/api/tasks', authenticateToken, async (req, res) => {
   try {
-    const tasks = await dbAll(
-      `SELECT t.*, 
-              u.name as assignee_name, 
-              p.name as project_name,
-              u1.name as owner_name,
-              u2.name as sub_owner_name
-       FROM tasks t
-       LEFT JOIN users u ON t.assignee_id = u.id
-       LEFT JOIN projects p ON t.project_id = p.id
-       LEFT JOIN users u1 ON t.owner_id = u1.id
-       LEFT JOIN users u2 ON t.sub_owner_id = u2.id
-       WHERE ? = 'Admin' 
-          OR t.assignee_id = ?
-          OR t.owner_id = ?
-          OR t.sub_owner_id = ?
-          OR t.id IN (SELECT task_id FROM task_members WHERE user_id = ?)
-          OR t.project_id IN (
-             SELECT id FROM projects 
-             WHERE owner_id = ? OR sub_owner_id = ? 
-                OR id IN (SELECT project_id FROM project_members WHERE user_id = ?)
-                OR id IN (SELECT project_id FROM project_departments WHERE department_id = ?)
-          )
-       ORDER BY t.due_date ASC`,
-      [
-        req.user.role, 
-        req.user.id, 
-        req.user.id, 
-        req.user.id, 
-        req.user.id, 
-        req.user.id, 
-        req.user.id, 
-        req.user.id, 
+    let query = `
+      SELECT t.*, 
+             u.name as assignee_name, 
+             p.name as project_name,
+             u1.name as owner_name,
+             u2.name as sub_owner_name
+      FROM tasks t
+      LEFT JOIN users u ON t.assignee_id = u.id
+      LEFT JOIN projects p ON t.project_id = p.id
+      LEFT JOIN users u1 ON t.owner_id = u1.id
+      LEFT JOIN users u2 ON t.sub_owner_id = u2.id
+    `;
+    const params = [];
+
+    if (req.user.role === 'Admin') {
+      // Admin sees all tasks
+      query += ` ORDER BY t.due_date ASC`;
+    } else if (req.user.role === 'Lead') {
+      // Lead sees tasks assigned to them, owned by them, or tasks in projects of their dept
+      query += `
+        WHERE t.assignee_id = ?
+           OR t.owner_id = ?
+           OR t.sub_owner_id = ?
+           OR t.id IN (SELECT task_id FROM task_members WHERE user_id = ?)
+           OR t.project_id IN (
+              SELECT id FROM projects 
+              WHERE owner_id = ? OR sub_owner_id = ? 
+                 OR id IN (SELECT project_id FROM project_members WHERE user_id = ?)
+                 OR id IN (SELECT project_id FROM project_departments WHERE department_id = ?)
+           )
+        ORDER BY t.due_date ASC
+      `;
+      params.push(
+        req.user.id,
+        req.user.id,
+        req.user.id,
+        req.user.id,
+        req.user.id,
+        req.user.id,
+        req.user.id,
         req.user.department_id
-      ]
-    );
+      );
+    } else {
+      // Member ONLY sees tasks where they are assignee, owner, sub-owner, in task_members,
+      // OR tasks in projects they explicitly belong to
+      query += `
+        WHERE t.assignee_id = ?
+           OR t.owner_id = ?
+           OR t.sub_owner_id = ?
+           OR t.id IN (SELECT task_id FROM task_members WHERE user_id = ?)
+           OR t.project_id IN (
+              SELECT id FROM projects 
+              WHERE owner_id = ? OR sub_owner_id = ? 
+                 OR id IN (SELECT project_id FROM project_members WHERE user_id = ?)
+           )
+        ORDER BY t.due_date ASC
+      `;
+      params.push(
+        req.user.id,
+        req.user.id,
+        req.user.id,
+        req.user.id,
+        req.user.id,
+        req.user.id,
+        req.user.id
+      );
+    }
+
+    const tasks = await dbAll(query, params);
 
     for (let task of tasks) {
       task.members = await dbAll(
@@ -643,23 +733,45 @@ app.get('/api/attendance/today', authenticateToken, (req, res) => {
   );
 });
 
-// Get team attendance status today for all staff of VBE Agency
+// Get team attendance status today (Admin: all agency; Lead: department members; Member: department members)
 app.get('/api/attendance/today-team', authenticateToken, async (req, res) => {
   try {
     const today = getVietnamTime().dateString;
-    const usersWithAttendance = await dbAll(
-      `SELECT u.id, u.name, u.email, u.role, d.name as department_name,
-              a.check_in, a.check_out, a.status as attendance_status,
-              a.check_in_distance, a.check_in_location_type, a.check_in_reason, a.check_in_address
-       FROM users u
-       LEFT JOIN departments d ON u.department_id = d.id
-       LEFT JOIN attendance a ON u.id = a.user_id AND a.date = ?
-       ORDER BY 
-         CASE WHEN a.check_in IS NOT NULL THEN 0 ELSE 1 END,
-         a.check_in ASC,
-         u.name ASC`,
-      [today]
-    );
+    let query = `
+      SELECT u.id, u.name, u.email, u.role, u.department_id, d.name as department_name,
+             a.check_in, a.check_out, a.status as attendance_status,
+             a.check_in_distance, a.check_in_location_type, a.check_in_reason, a.check_in_address
+      FROM users u
+      LEFT JOIN departments d ON u.department_id = d.id
+      LEFT JOIN attendance a ON u.id = a.user_id AND a.date = ?
+    `;
+    const params = [today];
+
+    if (req.user.role === 'Admin') {
+      // Admin sees everyone in the agency
+    } else if (req.user.role === 'Lead') {
+      // Lead sees staff in their department or self
+      query += ` WHERE (u.department_id = ? OR u.id = ?)`;
+      params.push(req.user.department_id, req.user.id);
+    } else {
+      // Member sees colleagues in their department or self
+      if (req.user.department_id) {
+        query += ` WHERE (u.department_id = ? OR u.id = ?)`;
+        params.push(req.user.department_id, req.user.id);
+      } else {
+        query += ` WHERE u.id = ?`;
+        params.push(req.user.id);
+      }
+    }
+
+    query += `
+      ORDER BY 
+        CASE WHEN a.check_in IS NOT NULL THEN 0 ELSE 1 END,
+        a.check_in ASC,
+        u.name ASC
+    `;
+
+    const usersWithAttendance = await dbAll(query, params);
     res.json(usersWithAttendance);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -895,19 +1007,27 @@ app.get('/api/attendance/logs', authenticateToken, (req, res) => {
   );
 });
 
-// Get all users attendance logs
+// Get attendance logs (Admin: all agency; Lead: their department)
 app.get('/api/attendance/admin-logs', authenticateToken, requireRole(['Admin', 'Lead']), (req, res) => {
-  db.all(
-    `SELECT a.*, u.name as user_name, d.name as department_name
-     FROM attendance a
-     JOIN users u ON a.user_id = u.id
-     LEFT JOIN departments d ON u.department_id = d.id
-     ORDER BY a.date DESC, a.check_in ASC`,
-    (err, rows) => {
-      if (err) return res.status(500).json({ error: err.message });
-      res.json(rows);
-    }
-  );
+  let sql = `
+    SELECT a.*, u.name as user_name, d.name as department_name
+    FROM attendance a
+    JOIN users u ON a.user_id = u.id
+    LEFT JOIN departments d ON u.department_id = d.id
+  `;
+  const params = [];
+
+  if (req.user.role === 'Lead') {
+    sql += ` WHERE (u.department_id = ? OR u.id = ?)`;
+    params.push(req.user.department_id, req.user.id);
+  }
+
+  sql += ` ORDER BY a.date DESC, a.check_in ASC`;
+
+  db.all(sql, params, (err, rows) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json(rows);
+  });
 });
 
 // GET /api/attendance/salary-report

@@ -433,7 +433,10 @@ export const DepartmentManager: React.FC = () => {
       </div>
  
       <div className="dept-grid">
-        {departments.map(dept => {
+        {(user?.role === 'Lead' && user.department_id
+          ? departments.filter(d => d.id === user.department_id)
+          : departments
+        ).map(dept => {
           const members = teamMembers.filter(m => m.department_id === dept.id);
           return (
             <div key={dept.id} className="dept-card">

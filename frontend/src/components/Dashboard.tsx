@@ -989,7 +989,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onCheckInChange, setActive
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
               <h3 className="panel-title" style={{ margin: 0 }}>
                 <Users size={20} className="text-cyan-400" />
-                Điểm diện Đội ngũ VBE
+                {user?.role === 'Admin' ? 'Điểm diện Toàn Agency' : user?.role === 'Lead' ? 'Điểm diện Phòng Ban' : 'Điểm diện Đồng Nghiệp'}
               </h3>
               <span style={{ 
                 fontSize: 12, 
