@@ -112,16 +112,21 @@ This log tracks the build history, feature additions, styling changes, and deplo
     - Các bảng dữ liệu nhiều cột được bọc trong container cuộn ngang riêng biệt (`overflow-x: auto; -webkit-overflow-scrolling: touch`), không bao giờ làm vỡ khung màn hình điện thoại.
     - Thêm khoảng đệm an toàn `padding-bottom: 74px` và hỗ trợ `env(safe-area-inset-bottom)` cho iPhone có thanh Home Indicator.
 
-### Phase 11: Sửa Lỗi Thêm/Bớt Dự Án Trên PostgreSQL & Chuẩn Hóa Phân Quyền (RBAC) Toàn Diện
-- **Khắc phục lỗi thêm/bớt dự án trên Neon PostgreSQL (Production)**:
-  - **Nguyên nhân**: Wrapper `database.js` tự động nối `RETURNING id` cho mọi câu lệnh `INSERT`. Các bảng liên kết nhiều-nhiều không có cột `id` (`project_members`, `project_departments`, `task_members`, `task_departments`) bị PostgreSQL báo lỗi `column "id" does not exist` dẫn tới mã phản hồi `500`.
-  - **Khắc phục**: Loại trừ các bảng trung gian khỏi mệnh đề `RETURNING id` trong `database.js`.
-  - **Xóa dự án an toàn**: Bổ sung dọn dẹp cascading (`DELETE` các bản ghi phụ thuộc ở `task_members`, `task_departments`, `tasks`, `project_members`, `project_departments` trước khi xóa `projects`), ngăn chặn triệt để lỗi ràng buộc khóa ngoại (foreign key violation).
-  - **Khắc phục giao diện Modal**: Sửa màu chữ tiêu đề modal từ trắng `#fff` sang `var(--text-primary)`, khắc phục chữ tàng hình; thêm thông báo lỗi chi tiết (`alert(error)`) khi thêm/sửa/xóa dự án hoặc công việc thất bại.
-- **Phân quyền chi tiết (RBAC)**:
-  - **Quản trị viên (Admin)**: Toàn quyền quản trị toàn hệ thống. Có thể tạo dự án với nhiều phòng ban và gán nhiều nhân viên khác nhau. Xem và quản lý toàn bộ nhân sự, điểm diện, công việc và bảng lương mọi phòng ban.
-  - **Trưởng phòng (Lead)**: Chỉ xem và quản lý các dự án thuộc phòng ban mình phụ trách (hoặc dự án do mình làm chủ trì / thành viên). Tự động gán phòng ban của mình khi tạo dự án mới. Điểm diện và báo cáo chỉ hiển thị nhân sự thuộc phòng ban của mình.
-  - **Nhân viên (Member)**: Tuân thủ nguyên tắc *"ai được gán dự án nào thì xem được dự án đó"* — chỉ xem các dự án và công việc mà mình được trực tiếp gán vào (`owner`, `sub_owner`, hoặc trong danh sách thành viên `project_members` / `task_members`). Điểm diện chỉ hiển thị nhân sự cùng phòng ban và dữ liệu cá nhân.
+### Phase 12: Nạp Dữ Liệu Nhân Sự Chính Thức VBE Agency & Triển Khai Beta Test
+- **Cấu hình Nhân sự Chính thức**:
+  - Tự động đồng bộ 10 nhân sự chính thức của tổ chức vào cơ sở dữ liệu Neon PostgreSQL:
+    1. `vinh@vbe.vn` — **Nguyen Hoang Vinh** (Quản trị viên - Admin cao nhất hệ thống).
+    2. `thienan@vbe.vn` — **Hồ Nguyễn Thiên Ân** (Trưởng phòng IT/Phát triển - Lead).
+    3. `media@vbe.vn` — **MEDIA VBE** (Phòng Thiết Kế & Media - Member).
+    4. `hoangminh@vbe.vn` — **Nguyen Thai Hoang Minh** (Trưởng nhóm Dev - Lead).
+    5. `bichtram@vbe.vn` — **Phạm Bích Trâm** (Phòng Marketing & Vận Hành - Member).
+    6. `quanvo@vbe.vn` — **QUAN TRUNG VO** (Phòng Marketing & Vận Hành - Member).
+    7. `business@revkol.com` — **Revkol Healing Spa** (Khối Spa & Chăm Sóc - Member).
+    8. `binh@vbe.vn` — **To Hai Binh** (Trưởng phòng Marketing & Vận Hành - Lead).
+    9. `phuongtrinh@vbe.vn` — **Trinh Phuong** (Ban Quản Lý / Kế toán - Member).
+    10. `contact@vbe.vn` — **VBE CONTACT** (Tiếp nhận / CSKH - Member).
+- **Mật khẩu khởi tạo**: Mặc định là `123456` cho toàn bộ 10 tài khoản.
+- **Cập nhật Giao diện Đăng nhập**: Thay thế các nút chọn nhanh tài khoản Demo bằng danh sách tài khoản nội bộ thật của công ty để nhân sự bấm 1-click kiểm thử tức thì.
 
 ---
 
@@ -131,4 +136,5 @@ The system is configured to roll out on the following platforms:
 1. **Frontend**: Deployed on **Vercel** (connects to the Git repository, builds `tsc && vite build` and serves static files globally).
 2. **Backend**: Deployed on **Render** (Node.js web service running `node src/server.js`).
 3. **Database**: Migrating SQLite to **Neon PostgreSQL** (serverless Postgres instance with free tier).
+
 

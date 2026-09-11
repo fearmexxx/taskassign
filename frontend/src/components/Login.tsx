@@ -205,25 +205,25 @@ export const Login: React.FC = () => {
           </button>
         </form>
 
-        <h4 className="quick-accounts-title">Chọn nhanh tài khoản Demo</h4>
+        <h4 className="quick-accounts-title">Chọn nhanh tài khoản thử nghiệm</h4>
         <div className="quick-accounts-grid">
-          <button onClick={() => handleSelectQuickAccount('alice@vbe.com.vn')} className="quick-acc-btn">
-            Alice (Quản trị viên)
+          <button onClick={() => handleSelectQuickAccount('vinh@vbe.vn')} className="quick-acc-btn">
+            Hoàng Vinh (Quản trị viên)
           </button>
-          <button onClick={() => handleSelectQuickAccount('bob@vbe.com.vn')} className="quick-acc-btn">
-            Bob (Trưởng phòng Dev)
+          <button onClick={() => handleSelectQuickAccount('thienan@vbe.vn')} className="quick-acc-btn">
+            Thiên Ân (Trưởng phòng IT)
           </button>
-          <button onClick={() => handleSelectQuickAccount('charlie@vbe.com.vn')} className="quick-acc-btn">
-            Charlie (Nhân viên Dev)
+          <button onClick={() => handleSelectQuickAccount('binh@vbe.vn')} className="quick-acc-btn">
+            Hải Bình (Trưởng phòng Mktg)
           </button>
-          <button onClick={() => handleSelectQuickAccount('diana@vbe.com.vn')} className="quick-acc-btn">
-            Diana (Trưởng phòng Design)
+          <button onClick={() => handleSelectQuickAccount('hoangminh@vbe.vn')} className="quick-acc-btn">
+            Hoàng Minh (Trưởng nhóm Dev)
           </button>
-          <button onClick={() => handleSelectQuickAccount('fiona@vbe.com.vn')} className="quick-acc-btn">
-            Fiona (Trưởng phòng Mktg)
+          <button onClick={() => handleSelectQuickAccount('bichtram@vbe.vn')} className="quick-acc-btn">
+            Bích Trâm (Nhân viên)
           </button>
-          <button onClick={() => handleSelectQuickAccount('george@vbe.com.vn')} className="quick-acc-btn">
-            George (Nhân viên Mktg)
+          <button onClick={() => handleSelectQuickAccount('phuongtrinh@vbe.vn')} className="quick-acc-btn">
+            Trương Phương (Nhân viên)
           </button>
         </div>
 

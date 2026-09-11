@@ -359,6 +359,72 @@ const initDatabase = () => {
         });
       })
       .then(() => {
+        // Nạp hoặc cập nhật 10 nhân sự chính thức của VBE Agency
+        return new Promise(async (res) => {
+          try {
+            // Đảm bảo có các phòng ban cơ bản
+            const defaultDepts = [
+              ['Ban Quản Lý', 'Executive and administration team'],
+              ['Phòng Phát Triển', 'Software engineers, IT and developers'],
+              ['Phòng Thiết Kế & Media', 'UI/UX, graphic designers and media production'],
+              ['Phòng Marketing & Vận Hành', 'Digital marketing, sales and operations'],
+              ['Khối Spa & Chăm Sóc', 'Revkol Healing Spa team and wellness operations']
+            ];
+
+            for (const [deptName, deptDesc] of defaultDepts) {
+              await new Promise(r => {
+                db.run(`INSERT INTO departments (name, description) VALUES (?, ?) ON CONFLICT DO NOTHING`, [deptName, deptDesc], () => r());
+              });
+            }
+
+            // Danh sách 10 nhân sự chính thức của VBE Agency
+            // Nguyen Hoang Vinh (vinh@vbe.vn) là Admin cao nhất
+            const officialUsers = [
+              { name: 'Nguyen Hoang Vinh', email: 'vinh@vbe.vn', role: 'Admin', dept: 'Ban Quản Lý', salary: 25000000 },
+              { name: 'Hồ Nguyễn Thiên Ân', email: 'thienan@vbe.vn', role: 'Lead', dept: 'Phòng Phát Triển', salary: 18000000 },
+              { name: 'MEDIA VBE', email: 'media@vbe.vn', role: 'Member', dept: 'Phòng Thiết Kế & Media', salary: 12000000 },
+              { name: 'Nguyen Thai Hoang Minh', email: 'hoangminh@vbe.vn', role: 'Lead', dept: 'Phòng Phát Triển', salary: 18000000 },
+              { name: 'Phạm Bích Trâm', email: 'bichtram@vbe.vn', role: 'Member', dept: 'Phòng Marketing & Vận Hành', salary: 12000000 },
+              { name: 'QUAN TRUNG VO', email: 'quanvo@vbe.vn', role: 'Member', dept: 'Phòng Marketing & Vận Hành', salary: 12000000 },
+              { name: 'Revkol Healing Spa', email: 'business@revkol.com', role: 'Member', dept: 'Khối Spa & Chăm Sóc', salary: 12000000 },
+              { name: 'To Hai Binh', email: 'binh@vbe.vn', role: 'Lead', dept: 'Phòng Marketing & Vận Hành', salary: 16000000 },
+              { name: 'Trinh Phuong', email: 'phuongtrinh@vbe.vn', role: 'Member', dept: 'Ban Quản Lý', salary: 14000000 },
+              { name: 'VBE CONTACT', email: 'contact@vbe.vn', role: 'Member', dept: 'Phòng Marketing & Vận Hành', salary: 10000000 }
+            ];
+
+            for (const u of officialUsers) {
+              await new Promise(r => {
+                db.get(`SELECT id FROM departments WHERE name = ? LIMIT 1`, [u.dept], (err, deptRow) => {
+                  const deptId = deptRow ? deptRow.id : 1;
+                  // Kiểm tra user đã tồn tại theo email chưa
+                  db.get(`SELECT id FROM users WHERE email = ?`, [u.email], (errUser, userRow) => {
+                    if (userRow) {
+                      // Cập nhật tên và role nếu cần (đặc biệt gán quyền Admin cho vinh@vbe.vn)
+                      db.run(
+                        `UPDATE users SET name = ?, role = ?, department_id = COALESCE(department_id, ?) WHERE id = ?`,
+                        [u.name, u.role, deptId, userRow.id],
+                        () => r()
+                      );
+                    } else {
+                      // Tạo tài khoản mới với mật khẩu mặc định 123456
+                      db.run(
+                        `INSERT INTO users (name, email, password, role, department_id, base_salary) VALUES (?, ?, '123456', ?, ?, ?)`,
+                        [u.name, u.email, u.role, deptId, u.salary],
+                        () => r()
+                      );
+                    }
+                  });
+                });
+              });
+            }
+            console.log("Database: Ensured official VBE Agency users exist with vinh@vbe.vn as Admin");
+          } catch (e) {
+            console.warn("Notice: Error in official users migration:", e.message);
+          }
+          res();
+        });
+      })
+      .then(() => {
         // Seed standard data if users are empty
         db.get("SELECT COUNT(*) as count FROM users", (err, row) => {
           if (err) {
