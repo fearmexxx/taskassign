@@ -359,65 +359,83 @@ const initDatabase = () => {
         });
       })
       .then(() => {
-        // Nạp hoặc cập nhật 10 nhân sự chính thức của VBE Agency
+        // Cấu hình cơ cấu phòng ban và 9 nhân sự chính thức VBE Agency
         return new Promise(async (res) => {
           try {
-            // Đảm bảo có các phòng ban cơ bản
-            const defaultDepts = [
-              ['Ban Quản Lý', 'Executive and administration team'],
-              ['Phòng Phát Triển', 'Software engineers, IT and developers'],
-              ['Phòng Thiết Kế & Media', 'UI/UX, graphic designers and media production'],
-              ['Phòng Marketing & Vận Hành', 'Digital marketing, sales and operations'],
-              ['Khối Spa & Chăm Sóc', 'Revkol Healing Spa team and wellness operations']
+            // 1. Xóa các phòng ban không dùng (Khối Spa & Chăm Sóc, Ban Quản Lý, Design cũ, v.v.)
+            // Đảm bảo có đúng 3 phòng ban theo yêu cầu mới:
+            // - Phòng Sales & Account
+            // - Phòng Media
+            // - Phòng Kỹ thuật & Vận Hành
+            const targetDepts = [
+              ['Phòng Sales & Account', 'Kinh doanh, chăm sóc khách hàng, quản trị account và truyền thông'],
+              ['Phòng Media', 'Sản xuất hình ảnh, video, thiết kế và quản trị nội dung'],
+              ['Phòng Kỹ thuật & Vận Hành', 'Phát triển phần mềm, hạ tầng kỹ thuật, IT và vận hành hệ thống']
             ];
 
-            for (const [deptName, deptDesc] of defaultDepts) {
+            for (const [deptName, deptDesc] of targetDepts) {
               await new Promise(r => {
                 db.run(`INSERT INTO departments (name, description) VALUES (?, ?) ON CONFLICT DO NOTHING`, [deptName, deptDesc], () => r());
               });
             }
 
-            // Danh sách 10 nhân sự chính thức của VBE Agency
-            // Nguyen Hoang Vinh (vinh@vbe.vn) là Admin cao nhất
+            // Xóa tài khoản business@revkol.com (Revkol Healing Spa) nếu có
+            await new Promise(r => {
+              db.run(`DELETE FROM users WHERE email = 'business@revkol.com'`, () => r());
+            });
+
+            // Lấy id của 3 phòng ban
+            const getDeptId = (name) => new Promise((resolve) => {
+              db.get(`SELECT id FROM departments WHERE name = ? LIMIT 1`, [name], (err, row) => resolve(row ? row.id : null));
+            });
+
+            const salesDeptId = await getDeptId('Phòng Sales & Account');
+            const mediaDeptId = await getDeptId('Phòng Media');
+            const techDeptId = await getDeptId('Phòng Kỹ thuật & Vận Hành');
+
+            // Danh sách 9 nhân sự chính thức VBE Agency:
+            // - vinh@vbe.vn: Quản trị viên (Admin) quản lý chung, KHÔNG thuộc phòng ban nào (department_id = null)
+            // - Phòng Sales & Account: binh@vbe.vn (Lead), phuongtrinh@vbe.vn (Member), bichtram@vbe.vn (Member), contact@vbe.vn (Member), media@vbe.vn (Member)
+            // - Phòng Media: quanvo@vbe.vn (Lead/Member)
+            // - Phòng Kỹ thuật & Vận Hành: thienan@vbe.vn (Lead), hoangminh@vbe.vn (Lead)
             const officialUsers = [
-              { name: 'Nguyen Hoang Vinh', email: 'vinh@vbe.vn', role: 'Admin', dept: 'Ban Quản Lý', salary: 25000000 },
-              { name: 'Hồ Nguyễn Thiên Ân', email: 'thienan@vbe.vn', role: 'Lead', dept: 'Phòng Phát Triển', salary: 18000000 },
-              { name: 'MEDIA VBE', email: 'media@vbe.vn', role: 'Member', dept: 'Phòng Thiết Kế & Media', salary: 12000000 },
-              { name: 'Nguyen Thai Hoang Minh', email: 'hoangminh@vbe.vn', role: 'Lead', dept: 'Phòng Phát Triển', salary: 18000000 },
-              { name: 'Phạm Bích Trâm', email: 'bichtram@vbe.vn', role: 'Member', dept: 'Phòng Marketing & Vận Hành', salary: 12000000 },
-              { name: 'QUAN TRUNG VO', email: 'quanvo@vbe.vn', role: 'Member', dept: 'Phòng Marketing & Vận Hành', salary: 12000000 },
-              { name: 'Revkol Healing Spa', email: 'business@revkol.com', role: 'Member', dept: 'Khối Spa & Chăm Sóc', salary: 12000000 },
-              { name: 'To Hai Binh', email: 'binh@vbe.vn', role: 'Lead', dept: 'Phòng Marketing & Vận Hành', salary: 16000000 },
-              { name: 'Trinh Phuong', email: 'phuongtrinh@vbe.vn', role: 'Member', dept: 'Ban Quản Lý', salary: 14000000 },
-              { name: 'VBE CONTACT', email: 'contact@vbe.vn', role: 'Member', dept: 'Phòng Marketing & Vận Hành', salary: 10000000 }
+              { name: 'Nguyen Hoang Vinh', email: 'vinh@vbe.vn', role: 'Admin', deptId: null, salary: 25000000 },
+              { name: 'To Hai Binh', email: 'binh@vbe.vn', role: 'Lead', deptId: salesDeptId, salary: 16000000 },
+              { name: 'Trinh Phuong', email: 'phuongtrinh@vbe.vn', role: 'Member', deptId: salesDeptId, salary: 14000000 },
+              { name: 'Phạm Bích Trâm', email: 'bichtram@vbe.vn', role: 'Member', deptId: salesDeptId, salary: 12000000 },
+              { name: 'VBE CONTACT', email: 'contact@vbe.vn', role: 'Member', deptId: salesDeptId, salary: 10000000 },
+              { name: 'MEDIA VBE', email: 'media@vbe.vn', role: 'Member', deptId: salesDeptId, salary: 12000000 },
+              { name: 'QUAN TRUNG VO', email: 'quanvo@vbe.vn', role: 'Lead', deptId: mediaDeptId, salary: 14000000 },
+              { name: 'Hồ Nguyễn Thiên Ân', email: 'thienan@vbe.vn', role: 'Lead', deptId: techDeptId, salary: 18000000 },
+              { name: 'Nguyen Thai Hoang Minh', email: 'hoangminh@vbe.vn', role: 'Lead', deptId: techDeptId, salary: 18000000 }
             ];
 
             for (const u of officialUsers) {
               await new Promise(r => {
-                db.get(`SELECT id FROM departments WHERE name = ? LIMIT 1`, [u.dept], (err, deptRow) => {
-                  const deptId = deptRow ? deptRow.id : 1;
-                  // Kiểm tra user đã tồn tại theo email chưa
-                  db.get(`SELECT id FROM users WHERE email = ?`, [u.email], (errUser, userRow) => {
-                    if (userRow) {
-                      // Cập nhật tên và role nếu cần (đặc biệt gán quyền Admin cho vinh@vbe.vn)
-                      db.run(
-                        `UPDATE users SET name = ?, role = ?, department_id = COALESCE(department_id, ?) WHERE id = ?`,
-                        [u.name, u.role, deptId, userRow.id],
-                        () => r()
-                      );
-                    } else {
-                      // Tạo tài khoản mới với mật khẩu mặc định 123456
-                      db.run(
-                        `INSERT INTO users (name, email, password, role, department_id, base_salary) VALUES (?, ?, '123456', ?, ?, ?)`,
-                        [u.name, u.email, u.role, deptId, u.salary],
-                        () => r()
-                      );
-                    }
-                  });
+                db.get(`SELECT id FROM users WHERE email = ?`, [u.email], (errUser, userRow) => {
+                  if (userRow) {
+                    db.run(
+                      `UPDATE users SET name = ?, role = ?, department_id = ? WHERE id = ?`,
+                      [u.name, u.role, u.deptId, userRow.id],
+                      () => r()
+                    );
+                  } else {
+                    db.run(
+                      `INSERT INTO users (name, email, password, role, department_id, base_salary) VALUES (?, ?, '123456', ?, ?, ?)`,
+                      [u.name, u.email, u.role, u.deptId, u.salary],
+                      () => r()
+                    );
+                  }
                 });
               });
             }
-            console.log("Database: Ensured official VBE Agency users exist with vinh@vbe.vn as Admin");
+
+            // Dọn dẹp phòng ban cũ nếu không có nhân viên nào trực thuộc
+            await new Promise(r => {
+              db.run(`DELETE FROM departments WHERE name IN ('Khối Spa & Chăm Sóc', 'Ban Quản Lý', 'Management')`, () => r());
+            });
+
+            console.log("Database: Refactored departments and official users for VBE Agency successfully");
           } catch (e) {
             console.warn("Notice: Error in official users migration:", e.message);
           }

@@ -208,7 +208,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, isChe
           <div className="profile-info">
             <div className="profile-name">{user.name}</div>
             <div className="profile-role-dept">
-              {translateRole(user.role)} • {translateDept(user.department_name || '')}
+              {translateRole(user.role)}{user.department_name ? ` • ${translateDept(user.department_name)}` : ' • Ban Lãnh Đạo / Quản Trị Chung'}
             </div>
           </div>
         </div>

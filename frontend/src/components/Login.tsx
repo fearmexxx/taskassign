@@ -208,22 +208,22 @@ export const Login: React.FC = () => {
         <h4 className="quick-accounts-title">Chọn nhanh tài khoản thử nghiệm</h4>
         <div className="quick-accounts-grid">
           <button onClick={() => handleSelectQuickAccount('vinh@vbe.vn')} className="quick-acc-btn">
-            Hoàng Vinh (Quản trị viên)
-          </button>
-          <button onClick={() => handleSelectQuickAccount('thienan@vbe.vn')} className="quick-acc-btn">
-            Thiên Ân (Trưởng phòng IT)
+            Hoàng Vinh (Quản trị chung)
           </button>
           <button onClick={() => handleSelectQuickAccount('binh@vbe.vn')} className="quick-acc-btn">
-            Hải Bình (Trưởng phòng Mktg)
+            Hải Bình (Sales & Account)
+          </button>
+          <button onClick={() => handleSelectQuickAccount('quanvo@vbe.vn')} className="quick-acc-btn">
+            Trung Võ (Phòng Media)
+          </button>
+          <button onClick={() => handleSelectQuickAccount('thienan@vbe.vn')} className="quick-acc-btn">
+            Thiên Ân (Kỹ thuật & VH)
           </button>
           <button onClick={() => handleSelectQuickAccount('hoangminh@vbe.vn')} className="quick-acc-btn">
-            Hoàng Minh (Trưởng nhóm Dev)
-          </button>
-          <button onClick={() => handleSelectQuickAccount('bichtram@vbe.vn')} className="quick-acc-btn">
-            Bích Trâm (Nhân viên)
+            Hoàng Minh (Kỹ thuật & VH)
           </button>
           <button onClick={() => handleSelectQuickAccount('phuongtrinh@vbe.vn')} className="quick-acc-btn">
-            Trương Phương (Nhân viên)
+            Phương Trinh (Sales & Account)
           </button>
         </div>
 

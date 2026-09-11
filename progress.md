@@ -112,21 +112,27 @@ This log tracks the build history, feature additions, styling changes, and deplo
     - Các bảng dữ liệu nhiều cột được bọc trong container cuộn ngang riêng biệt (`overflow-x: auto; -webkit-overflow-scrolling: touch`), không bao giờ làm vỡ khung màn hình điện thoại.
     - Thêm khoảng đệm an toàn `padding-bottom: 74px` và hỗ trợ `env(safe-area-inset-bottom)` cho iPhone có thanh Home Indicator.
 
-### Phase 12: Nạp Dữ Liệu Nhân Sự Chính Thức VBE Agency & Triển Khai Beta Test
-- **Cấu hình Nhân sự Chính thức**:
-  - Tự động đồng bộ 10 nhân sự chính thức của tổ chức vào cơ sở dữ liệu Neon PostgreSQL:
-    1. `vinh@vbe.vn` — **Nguyen Hoang Vinh** (Quản trị viên - Admin cao nhất hệ thống).
-    2. `thienan@vbe.vn` — **Hồ Nguyễn Thiên Ân** (Trưởng phòng IT/Phát triển - Lead).
-    3. `media@vbe.vn` — **MEDIA VBE** (Phòng Thiết Kế & Media - Member).
-    4. `hoangminh@vbe.vn` — **Nguyen Thai Hoang Minh** (Trưởng nhóm Dev - Lead).
-    5. `bichtram@vbe.vn` — **Phạm Bích Trâm** (Phòng Marketing & Vận Hành - Member).
-    6. `quanvo@vbe.vn` — **QUAN TRUNG VO** (Phòng Marketing & Vận Hành - Member).
-    7. `business@revkol.com` — **Revkol Healing Spa** (Khối Spa & Chăm Sóc - Member).
-    8. `binh@vbe.vn` — **To Hai Binh** (Trưởng phòng Marketing & Vận Hành - Lead).
-    9. `phuongtrinh@vbe.vn` — **Trinh Phuong** (Ban Quản Lý / Kế toán - Member).
-    10. `contact@vbe.vn` — **VBE CONTACT** (Tiếp nhận / CSKH - Member).
-- **Mật khẩu khởi tạo**: Mặc định là `123456` cho toàn bộ 10 tài khoản.
-- **Cập nhật Giao diện Đăng nhập**: Thay thế các nút chọn nhanh tài khoản Demo bằng danh sách tài khoản nội bộ thật của công ty để nhân sự bấm 1-click kiểm thử tức thì.
+### Phase 12: Tái Cấu Trúc Phòng Ban & Nạp Danh Sách Nhân Sự Chính Thức VBE Agency
+- **Tối ưu hóa Cơ cấu Tổ chức**:
+  - Loại bỏ hoàn toàn khối Spa (`Revkol Healing Spa`, `business@revkol.com`) và Ban Quản Lý cũ.
+  - Chuẩn hóa hệ thống thành **3 phòng ban nghiệp vụ chính thức**:
+    1. **Phòng Sales & Account**:
+       - `binh@vbe.vn` — **To Hai Binh** (Trưởng bộ phận - Lead)
+       - `phuongtrinh@vbe.vn` — **Trinh Phuong** (Thành viên - Member)
+       - `bichtram@vbe.vn` — **Phạm Bích Trâm** (Thành viên - Member)
+       - `contact@vbe.vn` — **VBE CONTACT** (Thành viên - Member)
+       - `media@vbe.vn` — **MEDIA VBE** (Thành viên - Member)
+    2. **Phòng Media**:
+       - `quanvo@vbe.vn` — **QUAN TRUNG VO** (Trưởng bộ phận - Lead)
+    3. **Phòng Kỹ thuật & Vận Hành**:
+       - `thienan@vbe.vn` — **Hồ Nguyễn Thiên Ân** (Trưởng bộ phận - Lead)
+       - `hoangminh@vbe.vn` — **Nguyen Thai Hoang Minh** (Trưởng bộ phận - Lead)
+  - **Quản trị viên Quản lý Chung**:
+    - `vinh@vbe.vn` — **Nguyen Hoang Vinh** (Admin tối cao, không trực thuộc phòng ban nào, quản lý toàn diện cả 3 phòng ban và toàn bộ hệ thống).
+- **Mật khẩu khởi tạo**: Mặc định là `123456` cho toàn bộ tài khoản.
+- **Giao diện & Đăng nhập**:
+  - Cập nhật các nút chọn nhanh tài khoản đăng nhập theo đúng 3 phòng ban mới.
+  - Xử lý hiển thị thân thiện trên Sidebar: tài khoản Admin không có phòng ban sẽ hiển thị nhãn chức danh *"Quản trị viên • Ban Lãnh Đạo / Quản Trị Chung"*.
 
 ---
 
@@ -136,5 +142,6 @@ The system is configured to roll out on the following platforms:
 1. **Frontend**: Deployed on **Vercel** (connects to the Git repository, builds `tsc && vite build` and serves static files globally).
 2. **Backend**: Deployed on **Render** (Node.js web service running `node src/server.js`).
 3. **Database**: Migrating SQLite to **Neon PostgreSQL** (serverless Postgres instance with free tier).
+
 
 

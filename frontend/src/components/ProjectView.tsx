@@ -374,11 +374,15 @@ export const ProjectView: React.FC = () => {
   };
 
   const translateDept = (dept: string) => {
+    if (!dept) return '';
     const depts: Record<string, string> = {
       'Management': 'Ban quản lý',
       'Development': 'Phòng Phát triển',
       'Design': 'Phòng Thiết kế',
-      'Marketing': 'Phòng Marketing'
+      'Marketing': 'Phòng Marketing',
+      'Phòng Sales & Account': 'Phòng Sales & Account',
+      'Phòng Media': 'Phòng Media',
+      'Phòng Kỹ thuật & Vận Hành': 'Phòng Kỹ thuật & Vận Hành'
     };
     return depts[dept] || dept;
   };
