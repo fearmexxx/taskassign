@@ -10,7 +10,8 @@ const app = express();
 const PORT = process.env.PORT || 5005;
 
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '15mb' }));
+app.use(express.urlencoded({ extended: true, limit: '15mb' }));
 
 // Request logging & Error Interceptor Middleware
 app.use((req, res, next) => {
@@ -636,12 +637,14 @@ app.get('/api/tasks', authenticateToken, async (req, res) => {
              u.name as assignee_name, 
              p.name as project_name,
              u1.name as owner_name,
-             u2.name as sub_owner_name
+             u2.name as sub_owner_name,
+             u3.name as creator_name
       FROM tasks t
       LEFT JOIN users u ON t.assignee_id = u.id
       LEFT JOIN projects p ON t.project_id = p.id
       LEFT JOIN users u1 ON t.owner_id = u1.id
       LEFT JOIN users u2 ON t.sub_owner_id = u2.id
+      LEFT JOIN users u3 ON t.created_by = u3.id
     `;
     const params = [];
 
@@ -649,15 +652,16 @@ app.get('/api/tasks', authenticateToken, async (req, res) => {
       // Admin sees all tasks
       query += ` ORDER BY t.due_date ASC`;
     } else if (req.user.role === 'Lead') {
-      // Lead sees tasks assigned to them, owned by them, or tasks in projects of their dept
+      // Lead sees tasks assigned to them, owned by them, created by them, or tasks in projects of their dept
       query += `
         WHERE t.assignee_id = ?
            OR t.owner_id = ?
            OR t.sub_owner_id = ?
+           OR t.created_by = ?
            OR t.id IN (SELECT task_id FROM task_members WHERE user_id = ?)
            OR t.project_id IN (
               SELECT id FROM projects 
-              WHERE owner_id = ? OR sub_owner_id = ? 
+              WHERE owner_id = ? OR sub_owner_id = ? OR created_by = ?
                  OR id IN (SELECT project_id FROM project_members WHERE user_id = ?)
                  OR id IN (SELECT project_id FROM project_departments WHERE department_id = ?)
            )
@@ -671,24 +675,29 @@ app.get('/api/tasks', authenticateToken, async (req, res) => {
         req.user.id,
         req.user.id,
         req.user.id,
+        req.user.id,
+        req.user.id,
         req.user.department_id
       );
     } else {
-      // Member ONLY sees tasks where they are assignee, owner, sub-owner, in task_members,
-      // OR tasks in projects they explicitly belong to
+      // Member sees tasks where they are assignee, owner, sub-owner, creator, in task_members,
+      // OR tasks in projects they explicitly belong to / created
       query += `
         WHERE t.assignee_id = ?
            OR t.owner_id = ?
            OR t.sub_owner_id = ?
+           OR t.created_by = ?
            OR t.id IN (SELECT task_id FROM task_members WHERE user_id = ?)
            OR t.project_id IN (
               SELECT id FROM projects 
-              WHERE owner_id = ? OR sub_owner_id = ? 
+              WHERE owner_id = ? OR sub_owner_id = ? OR created_by = ?
                  OR id IN (SELECT project_id FROM project_members WHERE user_id = ?)
            )
         ORDER BY t.due_date ASC
       `;
       params.push(
+        req.user.id,
+        req.user.id,
         req.user.id,
         req.user.id,
         req.user.id,
@@ -725,59 +734,111 @@ app.get('/api/tasks', authenticateToken, async (req, res) => {
   }
 });
 
-// Create task
+// Create task - All members in project can create tasks
 app.post('/api/tasks', authenticateToken, async (req, res) => {
-  const { title, description, project_id, assignee_id, status, priority, due_date, owner_id, sub_owner_id, members, departments } = req.body;
-  if (!title) return res.status(400).json({ error: 'Tiêu đề công việc là bắt buộc' });
+  const { title, description, details, attachments, project_id, assignee_id, status, priority, due_date, owner_id, sub_owner_id, members, departments } = req.body;
+  if (!title || !title.trim()) return res.status(400).json({ error: 'Tiêu đề công việc là bắt buộc' });
+  if (!project_id) return res.status(400).json({ error: 'Dự án là bắt buộc' });
 
   try {
+    const rawAttachments = attachments ? (typeof attachments === 'string' ? attachments : JSON.stringify(attachments)) : null;
+    const defaultOwnerId = owner_id || req.user.id;
+
     const result = await dbRun(
-      `INSERT INTO tasks (title, description, project_id, assignee_id, status, priority, due_date, owner_id, sub_owner_id) 
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [title, description, project_id, assignee_id, status || 'Todo', priority || 'Medium', due_date, owner_id || null, sub_owner_id || null]
+      `INSERT INTO tasks (title, description, details, attachments, created_by, project_id, assignee_id, status, priority, due_date, owner_id, sub_owner_id) 
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        title.trim(), 
+        description || '', 
+        details || '', 
+        rawAttachments, 
+        req.user.id, 
+        project_id, 
+        assignee_id || null, 
+        status || 'Todo', 
+        priority || 'Medium', 
+        due_date || null, 
+        defaultOwnerId, 
+        sub_owner_id || null
+      ]
     );
 
     const taskId = result.lastID;
 
-    // Save task members
-    if (Array.isArray(members)) {
-      for (let userId of members) {
-        await dbRun(`INSERT INTO task_members (task_id, user_id) VALUES (?, ?)`, [taskId, userId]);
+    // Save task members (include PIC and creator)
+    let memberSet = new Set(Array.isArray(members) ? members : []);
+    if (defaultOwnerId) memberSet.add(Number(defaultOwnerId));
+    if (sub_owner_id) memberSet.add(Number(sub_owner_id));
+
+    for (let userId of memberSet) {
+      if (userId) {
+        await dbRun(`INSERT INTO task_members (task_id, user_id) VALUES (?, ?) ON CONFLICT DO NOTHING`, [taskId, userId]);
       }
     }
 
     // Save task departments
     if (Array.isArray(departments)) {
       for (let deptId of departments) {
-        await dbRun(`INSERT INTO task_departments (task_id, department_id) VALUES (?, ?)`, [taskId, deptId]);
+        if (deptId) {
+          await dbRun(`INSERT INTO task_departments (task_id, department_id) VALUES (?, ?) ON CONFLICT DO NOTHING`, [taskId, deptId]);
+        }
       }
     }
 
     const task = await dbGet(
-      `SELECT t.*, u.name as assignee_name, p.name as project_name 
+      `SELECT t.*, u.name as assignee_name, p.name as project_name, u1.name as owner_name, u2.name as sub_owner_name, u3.name as creator_name
        FROM tasks t
        LEFT JOIN users u ON t.assignee_id = u.id
        LEFT JOIN projects p ON t.project_id = p.id
+       LEFT JOIN users u1 ON t.owner_id = u1.id
+       LEFT JOIN users u2 ON t.sub_owner_id = u2.id
+       LEFT JOIN users u3 ON t.created_by = u3.id
        WHERE t.id = ?`,
+      [taskId]
+    );
+
+    task.members = await dbAll(
+      `SELECT tm.user_id, u.name 
+       FROM task_members tm
+       JOIN users u ON tm.user_id = u.id
+       WHERE tm.task_id = ?`,
+      [taskId]
+    );
+
+    task.departments = await dbAll(
+      `SELECT td.department_id, d.name 
+       FROM task_departments td
+       JOIN departments d ON td.department_id = d.id
+       WHERE td.task_id = ?`,
       [taskId]
     );
 
     res.status(201).json(task);
   } catch (err) {
+    console.error("Create task error:", err);
     res.status(500).json({ error: err.message });
   }
 });
 
 // Update task
 app.put('/api/tasks/:id', authenticateToken, async (req, res) => {
-  const { title, description, project_id, assignee_id, status, priority, due_date, owner_id, sub_owner_id, members, departments } = req.body;
+  const { title, description, details, attachments, project_id, assignee_id, status, priority, due_date, owner_id, sub_owner_id, members, departments } = req.body;
   const taskId = req.params.id;
 
   try {
+    const currentTask = await dbGet(`SELECT * FROM tasks WHERE id = ?`, [taskId]);
+    if (!currentTask) return res.status(404).json({ error: 'Không tìm thấy công việc' });
+
+    const rawAttachments = attachments !== undefined 
+      ? (typeof attachments === 'string' ? attachments : JSON.stringify(attachments)) 
+      : currentTask.attachments;
+
     await dbRun(
       `UPDATE tasks 
        SET title = COALESCE(?, title),
            description = COALESCE(?, description),
+           details = COALESCE(?, details),
+           attachments = ?,
            project_id = COALESCE(?, project_id),
            assignee_id = COALESCE(?, assignee_id),
            status = COALESCE(?, status),
@@ -786,14 +847,29 @@ app.put('/api/tasks/:id', authenticateToken, async (req, res) => {
            owner_id = COALESCE(?, owner_id),
            sub_owner_id = COALESCE(?, sub_owner_id)
        WHERE id = ?`,
-      [title, description, project_id, assignee_id, status, priority, due_date, owner_id, sub_owner_id, taskId]
+      [
+        title ? title.trim() : null, 
+        description !== undefined ? description : null, 
+        details !== undefined ? details : null, 
+        rawAttachments, 
+        project_id || null, 
+        assignee_id || null, 
+        status || null, 
+        priority || null, 
+        due_date || null, 
+        owner_id || null, 
+        sub_owner_id || null, 
+        taskId
+      ]
     );
 
     // Update members mappings
     if (Array.isArray(members)) {
       await dbRun(`DELETE FROM task_members WHERE task_id = ?`, [taskId]);
       for (let userId of members) {
-        await dbRun(`INSERT INTO task_members (task_id, user_id) VALUES (?, ?)`, [taskId, userId]);
+        if (userId) {
+          await dbRun(`INSERT INTO task_members (task_id, user_id) VALUES (?, ?) ON CONFLICT DO NOTHING`, [taskId, userId]);
+        }
       }
     }
 
@@ -801,31 +877,158 @@ app.put('/api/tasks/:id', authenticateToken, async (req, res) => {
     if (Array.isArray(departments)) {
       await dbRun(`DELETE FROM task_departments WHERE task_id = ?`, [taskId]);
       for (let deptId of departments) {
-        await dbRun(`INSERT INTO task_departments (task_id, department_id) VALUES (?, ?)`, [taskId, deptId]);
+        if (deptId) {
+          await dbRun(`INSERT INTO task_departments (task_id, department_id) VALUES (?, ?) ON CONFLICT DO NOTHING`, [taskId, deptId]);
+        }
       }
     }
 
     const task = await dbGet(
-      `SELECT t.*, u.name as assignee_name, p.name as project_name 
+      `SELECT t.*, u.name as assignee_name, p.name as project_name, u1.name as owner_name, u2.name as sub_owner_name, u3.name as creator_name
        FROM tasks t
        LEFT JOIN users u ON t.assignee_id = u.id
        LEFT JOIN projects p ON t.project_id = p.id
+       LEFT JOIN users u1 ON t.owner_id = u1.id
+       LEFT JOIN users u2 ON t.sub_owner_id = u2.id
+       LEFT JOIN users u3 ON t.created_by = u3.id
        WHERE t.id = ?`,
+      [taskId]
+    );
+
+    task.members = await dbAll(
+      `SELECT tm.user_id, u.name 
+       FROM task_members tm
+       JOIN users u ON tm.user_id = u.id
+       WHERE tm.task_id = ?`,
+      [taskId]
+    );
+
+    task.departments = await dbAll(
+      `SELECT td.department_id, d.name 
+       FROM task_departments td
+       JOIN departments d ON td.department_id = d.id
+       WHERE td.task_id = ?`,
       [taskId]
     );
 
     res.json(task);
   } catch (err) {
+    console.error("Update task error:", err);
     res.status(500).json({ error: err.message });
   }
 });
 
-// Delete task
-app.delete('/api/tasks/:id', authenticateToken, (req, res) => {
-  db.run(`DELETE FROM tasks WHERE id = ?`, [req.params.id], function(err) {
-    if (err) return res.status(500).json({ error: err.message });
+// Delete task - Creator, PIC, Project Owner, or Admin can delete
+app.delete('/api/tasks/:id', authenticateToken, async (req, res) => {
+  const taskId = req.params.id;
+  try {
+    const task = await dbGet(`SELECT * FROM tasks WHERE id = ?`, [taskId]);
+    if (!task) return res.status(404).json({ error: 'Không tìm thấy công việc' });
+
+    let canDelete = req.user.role === 'Admin' || task.created_by === req.user.id || task.owner_id === req.user.id;
+    if (!canDelete && task.project_id) {
+      const project = await dbGet(`SELECT owner_id, created_by FROM projects WHERE id = ?`, [task.project_id]);
+      if (project && (project.owner_id === req.user.id || project.created_by === req.user.id)) {
+        canDelete = true;
+      }
+    }
+
+    if (!canDelete) {
+      return res.status(403).json({ error: 'Bạn không có quyền xóa công việc này' });
+    }
+
+    await dbRun(`DELETE FROM task_members WHERE task_id = ?`, [taskId]);
+    await dbRun(`DELETE FROM task_departments WHERE task_id = ?`, [taskId]);
+    await dbRun(`DELETE FROM tasks WHERE id = ?`, [taskId]);
+
     res.json({ message: 'Công việc đã được xóa thành công' });
-  });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Project Department & Overall Progress Matrix
+app.get('/api/projects/:id/progress-matrix', authenticateToken, async (req, res) => {
+  const projectId = req.params.id;
+  try {
+    const project = await dbGet(`SELECT * FROM projects WHERE id = ?`, [projectId]);
+    if (!project) return res.status(404).json({ error: 'Không tìm thấy dự án' });
+
+    // 1. Overall project progress for Executive / General Management
+    const overallRow = await dbGet(`
+      SELECT 
+        COUNT(id) as total,
+        SUM(CASE WHEN status = 'Todo' THEN 1 ELSE 0 END) as todo,
+        SUM(CASE WHEN status = 'InProgress' THEN 1 ELSE 0 END) as in_progress,
+        SUM(CASE WHEN status = 'Review' THEN 1 ELSE 0 END) as review,
+        SUM(CASE WHEN status = 'Done' THEN 1 ELSE 0 END) as done
+      FROM tasks
+      WHERE project_id = ?
+    `, [projectId]);
+
+    const totalTasks = overallRow ? parseInt(overallRow.total || 0) : 0;
+    const completedTasks = overallRow ? parseInt(overallRow.done || 0) : 0;
+    const overallCompletion = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
+
+    const overall = {
+      total: totalTasks,
+      todo: overallRow ? parseInt(overallRow.todo || 0) : 0,
+      in_progress: overallRow ? parseInt(overallRow.in_progress || 0) : 0,
+      review: overallRow ? parseInt(overallRow.review || 0) : 0,
+      done: completedTasks,
+      percent: overallCompletion
+    };
+
+    // 2. Department-level breakdown for this project
+    // Fetch all active departments
+    const allDepts = await dbAll(`SELECT id, name FROM departments ORDER BY id ASC`);
+    
+    // For each department, find tasks that either:
+    // (a) are explicitly associated with the department via task_departments, OR
+    // (b) have owner or assignee belonging to that department
+    const deptsProgress = [];
+    for (const d of allDepts) {
+      const deptTasks = await dbAll(`
+        SELECT DISTINCT t.id, t.status 
+        FROM tasks t
+        LEFT JOIN task_departments td ON td.task_id = t.id
+        LEFT JOIN users u_owner ON t.owner_id = u_owner.id
+        LEFT JOIN users u_assignee ON t.assignee_id = u_assignee.id
+        WHERE t.project_id = ?
+          AND (td.department_id = ? OR u_owner.department_id = ? OR u_assignee.department_id = ?)
+      `, [projectId, d.id, d.id, d.id]);
+
+      if (deptTasks && deptTasks.length > 0) {
+        const dTotal = deptTasks.length;
+        const dDone = deptTasks.filter(t => t.status === 'Done').length;
+        const dTodo = deptTasks.filter(t => t.status === 'Todo').length;
+        const dInProgress = deptTasks.filter(t => t.status === 'InProgress').length;
+        const dReview = deptTasks.filter(t => t.status === 'Review').length;
+        const dPercent = dTotal > 0 ? Math.round((dDone / dTotal) * 100) : 0;
+
+        deptsProgress.push({
+          department_id: d.id,
+          department_name: d.name,
+          total: dTotal,
+          todo: dTodo,
+          in_progress: dInProgress,
+          review: dReview,
+          done: dDone,
+          percent: dPercent
+        });
+      }
+    }
+
+    res.json({
+      project_id: parseInt(projectId),
+      project_name: project.name,
+      overall,
+      departments: deptsProgress
+    });
+  } catch (err) {
+    console.error("Progress matrix error:", err);
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // --- ATTENDANCE SYSTEM (CHẤM CÔNG VBE AGENCY) ---

@@ -231,6 +231,9 @@ const initDatabase = () => {
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             title TEXT NOT NULL,
             description TEXT,
+            details TEXT,
+            attachments TEXT,
+            created_by INTEGER,
             project_id INTEGER,
             assignee_id INTEGER,
             status TEXT CHECK(status IN ('Todo', 'InProgress', 'Review', 'Done')) DEFAULT 'Todo',
@@ -242,7 +245,8 @@ const initDatabase = () => {
             FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
             FOREIGN KEY (assignee_id) REFERENCES users(id) ON DELETE SET NULL,
             FOREIGN KEY (owner_id) REFERENCES users(id) ON DELETE SET NULL,
-            FOREIGN KEY (sub_owner_id) REFERENCES users(id) ON DELETE SET NULL
+            FOREIGN KEY (sub_owner_id) REFERENCES users(id) ON DELETE SET NULL,
+            FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
           )
         `),
         runCreateTable(`
@@ -330,6 +334,17 @@ const initDatabase = () => {
           db.run(`ALTER TABLE projects ADD COLUMN created_by INTEGER`, (err) => {
             // Ignore error if column already exists
             res();
+          });
+        });
+      })
+      .then(() => {
+        return new Promise((res) => {
+          db.run(`ALTER TABLE tasks ADD COLUMN details TEXT`, () => {
+            db.run(`ALTER TABLE tasks ADD COLUMN attachments TEXT`, () => {
+              db.run(`ALTER TABLE tasks ADD COLUMN created_by INTEGER`, () => {
+                res();
+              });
+            });
           });
         });
       })

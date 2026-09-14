@@ -983,13 +983,13 @@ export const Dashboard: React.FC<DashboardProps> = ({ onCheckInChange, setActive
           </div>
         </div>
 
-        {/* CỘT PHẢI: ĐIỂM DIỆN ĐỘI NGŨ VBE AGENCY HÔM NAY */}
+        {/* CỘT PHẢI: ĐIỂM DANH ĐỘI NGŨ VBE AGENCY HÔM NAY */}
         <div>
           <div className="section-panel glass-panel" style={{ height: '100%' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
               <h3 className="panel-title" style={{ margin: 0 }}>
                 <Users size={20} className="text-cyan-400" />
-                {user?.role === 'Admin' ? 'Điểm diện Toàn Agency' : user?.role === 'Lead' ? 'Điểm diện Phòng Ban' : 'Điểm diện Đồng Nghiệp'}
+                {user?.role === 'Admin' ? 'Điểm danh Toàn Agency' : user?.role === 'Lead' ? 'Điểm danh Phòng Ban' : 'Điểm danh Đồng Nghiệp'}
               </h3>
               <span style={{ 
                 fontSize: 12, 
