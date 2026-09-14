@@ -204,8 +204,26 @@ const initDatabase = () => {
             end_date TEXT,
             owner_id INTEGER,
             sub_owner_id INTEGER,
+            created_by INTEGER,
             FOREIGN KEY (owner_id) REFERENCES users(id),
-            FOREIGN KEY (sub_owner_id) REFERENCES users(id)
+            FOREIGN KEY (sub_owner_id) REFERENCES users(id),
+            FOREIGN KEY (created_by) REFERENCES users(id)
+          )
+        `),
+        runCreateTable(`
+          CREATE TABLE IF NOT EXISTS project_deletion_logs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            project_id INTEGER,
+            project_name TEXT NOT NULL,
+            project_description TEXT,
+            created_by_id INTEGER,
+            created_by_name TEXT,
+            deleted_by_id INTEGER NOT NULL,
+            deleted_by_name TEXT NOT NULL,
+            deleted_by_email TEXT NOT NULL,
+            deleted_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            total_tasks INTEGER DEFAULT 0,
+            tasks_summary TEXT
           )
         `),
         runCreateTable(`
@@ -302,6 +320,14 @@ const initDatabase = () => {
       .then(() => {
         return new Promise((res) => {
           db.run(`ALTER TABLE users ADD COLUMN base_salary INTEGER DEFAULT 15000000`, (err) => {
+            // Ignore error if column already exists
+            res();
+          });
+        });
+      })
+      .then(() => {
+        return new Promise((res) => {
+          db.run(`ALTER TABLE projects ADD COLUMN created_by INTEGER`, (err) => {
             // Ignore error if column already exists
             res();
           });

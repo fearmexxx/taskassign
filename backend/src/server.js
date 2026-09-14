@@ -366,39 +366,43 @@ app.get('/api/projects', authenticateToken, async (req, res) => {
       SELECT p.*, 
              u1.name as owner_name,
              u2.name as sub_owner_name,
+             u3.name as creator_name,
              COUNT(t.id) as total_tasks,
              SUM(CASE WHEN t.status = 'Done' THEN 1 ELSE 0 END) as completed_tasks
       FROM projects p
       LEFT JOIN users u1 ON p.owner_id = u1.id
       LEFT JOIN users u2 ON p.sub_owner_id = u2.id
+      LEFT JOIN users u3 ON p.created_by = u3.id
       LEFT JOIN tasks t ON t.project_id = p.id
     `;
     const params = [];
 
     if (req.user.role === 'Admin') {
       // Admin sees all projects
-      query += ` GROUP BY p.id ORDER BY p.id DESC`;
+      query += ` GROUP BY p.id, u1.name, u2.name, u3.name ORDER BY p.id DESC`;
     } else if (req.user.role === 'Lead') {
-      // Lead sees projects where they are owner/sub_owner/member OR projects belonging to their department
+      // Lead sees projects where they are creator/owner/sub_owner/member OR projects belonging to their department
       query += `
-        WHERE p.owner_id = ? 
+        WHERE p.created_by = ?
+           OR p.owner_id = ? 
            OR p.sub_owner_id = ? 
            OR p.id IN (SELECT project_id FROM project_members WHERE user_id = ?)
            OR p.id IN (SELECT project_id FROM project_departments WHERE department_id = ?)
-        GROUP BY p.id
+        GROUP BY p.id, u1.name, u2.name, u3.name
         ORDER BY p.id DESC
       `;
-      params.push(req.user.id, req.user.id, req.user.id, req.user.department_id);
+      params.push(req.user.id, req.user.id, req.user.id, req.user.id, req.user.department_id);
     } else {
-      // Member ONLY sees projects where they are explicitly assigned (owner, sub_owner, or in project_members)
+      // Member sees projects where they are creator, owner, sub_owner, or in project_members
       query += `
-        WHERE p.owner_id = ? 
+        WHERE p.created_by = ?
+           OR p.owner_id = ? 
            OR p.sub_owner_id = ? 
            OR p.id IN (SELECT project_id FROM project_members WHERE user_id = ?)
-        GROUP BY p.id
+        GROUP BY p.id, u1.name, u2.name, u3.name
         ORDER BY p.id DESC
       `;
-      params.push(req.user.id, req.user.id, req.user.id);
+      params.push(req.user.id, req.user.id, req.user.id, req.user.id);
     }
 
     const projects = await dbAll(query, params);
@@ -428,8 +432,8 @@ app.get('/api/projects', authenticateToken, async (req, res) => {
   }
 });
 
-// Create project
-app.post('/api/projects', authenticateToken, requireRole(['Admin', 'Lead']), async (req, res) => {
+// Create project - ALL employees are allowed to create projects
+app.post('/api/projects', authenticateToken, async (req, res) => {
   const { name, description, status, start_date, end_date, owner_id, sub_owner_id, members, departments } = req.body;
   if (!name || !name.trim()) return res.status(400).json({ error: 'Tên dự án là bắt buộc' });
 
@@ -437,18 +441,18 @@ app.post('/api/projects', authenticateToken, requireRole(['Admin', 'Lead']), asy
     const trimmedName = name.trim();
     const defaultOwnerId = owner_id || req.user.id;
     const result = await dbRun(
-      `INSERT INTO projects (name, description, status, start_date, end_date, owner_id, sub_owner_id) 
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [trimmedName, description || '', status || 'Active', start_date || null, end_date || null, defaultOwnerId, sub_owner_id || null]
+      `INSERT INTO projects (name, description, status, start_date, end_date, owner_id, sub_owner_id, created_by) 
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [trimmedName, description || '', status || 'Active', start_date || null, end_date || null, defaultOwnerId, sub_owner_id || null, req.user.id]
     );
 
     const projectId = result.lastID;
 
-    // Build complete member list (ensure owner and creator are included so they have access)
+    // Build complete member list (ensure creator and owner are always included)
     let memberSet = new Set(Array.isArray(members) ? members : []);
+    if (req.user.id) memberSet.add(Number(req.user.id));
     if (defaultOwnerId) memberSet.add(Number(defaultOwnerId));
     if (sub_owner_id) memberSet.add(Number(sub_owner_id));
-    if (req.user.id) memberSet.add(Number(req.user.id));
 
     for (let userId of memberSet) {
       if (userId) {
@@ -458,8 +462,8 @@ app.post('/api/projects', authenticateToken, requireRole(['Admin', 'Lead']), asy
 
     // Save departments mappings
     let targetDepts = Array.isArray(departments) ? [...departments] : [];
-    // If user is Lead and no depts selected, automatically associate Lead's department
-    if (req.user.role === 'Lead' && targetDepts.length === 0 && req.user.department_id) {
+    // If user has a department and no depts were selected, associate creator's department
+    if (targetDepts.length === 0 && req.user.department_id) {
       targetDepts.push(req.user.department_id);
     }
 
@@ -469,7 +473,17 @@ app.post('/api/projects', authenticateToken, requireRole(['Admin', 'Lead']), asy
       }
     }
 
-    res.status(201).json({ id: projectId, name: trimmedName, description, status: status || 'Active', start_date, end_date });
+    res.status(201).json({ 
+      id: projectId, 
+      name: trimmedName, 
+      description, 
+      status: status || 'Active', 
+      start_date, 
+      end_date,
+      owner_id: defaultOwnerId,
+      sub_owner_id: sub_owner_id || null,
+      created_by: req.user.id
+    });
   } catch (err) {
     console.error("Create project error:", err);
     if (err.code === '23505' || (err.message && err.message.includes('unique'))) {
@@ -484,39 +498,30 @@ app.put('/api/projects/:id', authenticateToken, async (req, res) => {
   const { name, description, status, start_date, end_date, owner_id, sub_owner_id, members, departments } = req.body;
   const projectId = req.params.id;
 
-  try {
-    const project = await dbGet(`SELECT * FROM projects WHERE id = ?`, [projectId]);
-    if (!project) return res.status(404).json({ error: 'Không tìm thấy dự án' });
+  if (!name || !name.trim()) return res.status(400).json({ error: 'Tên dự án là bắt buộc' });
 
-    // Admin or Project Owner or Project Sub-Owner can edit
-    // Also Lead if project belongs to their department
-    let canEdit = req.user.role === 'Admin' || project.owner_id === req.user.id || project.sub_owner_id === req.user.id;
-    if (!canEdit && req.user.role === 'Lead' && req.user.department_id) {
-      const deptCheck = await dbGet(
-        `SELECT 1 FROM project_departments WHERE project_id = ? AND department_id = ?`,
-        [projectId, req.user.department_id]
-      );
-      if (deptCheck) canEdit = true;
-    }
+  try {
+    // Permission check: Admin, Project Creator, or Project Owner can edit project settings
+    const currentProj = await dbGet(`SELECT * FROM projects WHERE id = ?`, [projectId]);
+    if (!currentProj) return res.status(404).json({ error: 'Không tìm thấy dự án' });
+
+    const canEdit = req.user.role === 'Admin' || 
+                    currentProj.created_by === req.user.id || 
+                    currentProj.owner_id === req.user.id ||
+                    currentProj.sub_owner_id === req.user.id;
 
     if (!canEdit) {
-      return res.status(403).json({ error: 'Bạn không có quyền chỉnh sửa thiết lập dự án này' });
+      return res.status(403).json({ error: 'Bạn không có quyền chỉnh sửa dự án này' });
     }
 
     await dbRun(
       `UPDATE projects 
-       SET name = COALESCE(?, name),
-           description = COALESCE(?, description),
-           status = COALESCE(?, status),
-           start_date = COALESCE(?, start_date),
-           end_date = COALESCE(?, end_date),
-           owner_id = COALESCE(?, owner_id),
-           sub_owner_id = COALESCE(?, sub_owner_id)
+       SET name = ?, description = ?, status = ?, start_date = ?, end_date = ?, owner_id = ?, sub_owner_id = ?
        WHERE id = ?`,
-      [name, description, status, start_date, end_date, owner_id, sub_owner_id, projectId]
+      [name.trim(), description || '', status || 'Active', start_date || null, end_date || null, owner_id || null, sub_owner_id || null, projectId]
     );
 
-    // Update members mappings
+    // Update members
     if (Array.isArray(members)) {
       await dbRun(`DELETE FROM project_members WHERE project_id = ?`, [projectId]);
       for (let userId of members) {
@@ -524,7 +529,7 @@ app.put('/api/projects/:id', authenticateToken, async (req, res) => {
       }
     }
 
-    // Update departments mappings
+    // Update departments
     if (Array.isArray(departments)) {
       await dbRun(`DELETE FROM project_departments WHERE project_id = ?`, [projectId]);
       for (let deptId of departments) {
@@ -542,29 +547,57 @@ app.put('/api/projects/:id', authenticateToken, async (req, res) => {
   }
 });
 
-// Delete project
-app.delete('/api/projects/:id', authenticateToken, requireRole(['Admin', 'Lead']), async (req, res) => {
+// Delete project - Only the creator OR an Admin can delete a project. Log full audit history!
+app.delete('/api/projects/:id', authenticateToken, async (req, res) => {
   const projectId = req.params.id;
   try {
-    const project = await dbGet(`SELECT * FROM projects WHERE id = ?`, [projectId]);
+    const project = await dbGet(`
+      SELECT p.*, u.name as creator_name 
+      FROM projects p 
+      LEFT JOIN users u ON p.created_by = u.id 
+      WHERE p.id = ?
+    `, [projectId]);
+    
     if (!project) return res.status(404).json({ error: 'Không tìm thấy dự án' });
 
-    // Lead can only delete projects where they are Owner or if belongs to their department
-    let canDelete = req.user.role === 'Admin' || project.owner_id === req.user.id;
-    if (!canDelete && req.user.role === 'Lead' && req.user.department_id) {
-      const deptCheck = await dbGet(
-        `SELECT 1 FROM project_departments WHERE project_id = ? AND department_id = ?`,
-        [projectId, req.user.department_id]
-      );
-      if (deptCheck) canDelete = true;
-    }
+    // Deletion rule: User can ONLY delete if they are Admin or if they created this project
+    const canDelete = req.user.role === 'Admin' || project.created_by === req.user.id;
 
     if (!canDelete) {
-      return res.status(403).json({ error: 'Bạn không có quyền xóa dự án này' });
+      return res.status(403).json({ error: 'Bạn chỉ có quyền xóa dự án do chính bạn tạo.' });
     }
 
-    // Cascading cleanups to avoid any foreign key conflicts on PostgreSQL/SQLite
-    const projectTasks = await dbAll(`SELECT id FROM tasks WHERE project_id = ?`, [projectId]);
+    // Fetch tasks belonging to this project for detailed audit summary
+    const projectTasks = await dbAll(`SELECT id, title, status FROM tasks WHERE project_id = ?`, [projectId]);
+    const totalTasks = projectTasks ? projectTasks.length : 0;
+    const taskTitles = projectTasks && projectTasks.length > 0 
+      ? projectTasks.map(t => `${t.title} [${t.status}]`).join('; ')
+      : 'Không có công việc nào';
+
+    // 1. Write deletion audit log
+    try {
+      await dbRun(
+        `INSERT INTO project_deletion_logs 
+         (project_id, project_name, project_description, created_by_id, created_by_name, deleted_by_id, deleted_by_name, deleted_by_email, total_tasks, tasks_summary) 
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          project.id,
+          project.name,
+          project.description || '',
+          project.created_by || null,
+          project.creator_name || 'Không rõ',
+          req.user.id,
+          req.user.name,
+          req.user.email,
+          totalTasks,
+          taskTitles
+        ]
+      );
+    } catch (logErr) {
+      console.error("Error writing project deletion log:", logErr);
+    }
+
+    // 2. Cascading cleanups to avoid foreign key conflicts
     for (const t of projectTasks) {
       await dbRun(`DELETE FROM task_members WHERE task_id = ?`, [t.id]);
       await dbRun(`DELETE FROM task_departments WHERE task_id = ?`, [t.id]);
@@ -574,8 +607,23 @@ app.delete('/api/projects/:id', authenticateToken, requireRole(['Admin', 'Lead']
     await dbRun(`DELETE FROM project_departments WHERE project_id = ?`, [projectId]);
     await dbRun(`DELETE FROM projects WHERE id = ?`, [projectId]);
 
-    res.json({ message: 'Dự án đã được xóa thành công' });
+    res.json({ message: 'Dự án đã được xóa thành công và đã ghi nhật ký hệ thống' });
   } catch (err) {
+    console.error("Error deleting project:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Admin-only: View project deletion audit logs
+app.get('/api/admin/project-deletion-logs', authenticateToken, requireRole(['Admin']), async (req, res) => {
+  try {
+    const logs = await dbAll(`
+      SELECT * FROM project_deletion_logs 
+      ORDER BY id DESC
+    `);
+    res.json(logs || []);
+  } catch (err) {
+    console.error("Error fetching project deletion logs:", err);
     res.status(500).json({ error: err.message });
   }
 });

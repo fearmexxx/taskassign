@@ -27,7 +27,24 @@ CREATE TABLE IF NOT EXISTS projects (
     start_date VARCHAR(50),
     end_date VARCHAR(50),
     owner_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
-    sub_owner_id INTEGER REFERENCES users(id) ON DELETE SET NULL
+    sub_owner_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    created_by INTEGER REFERENCES users(id) ON DELETE SET NULL
+);
+
+-- 3b. Project Deletion Logs Table
+CREATE TABLE IF NOT EXISTS project_deletion_logs (
+    id SERIAL PRIMARY KEY,
+    project_id INTEGER,
+    project_name VARCHAR(255) NOT NULL,
+    project_description TEXT,
+    created_by_id INTEGER,
+    created_by_name VARCHAR(255),
+    deleted_by_id INTEGER NOT NULL,
+    deleted_by_name VARCHAR(255) NOT NULL,
+    deleted_by_email VARCHAR(255) NOT NULL,
+    deleted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    total_tasks INTEGER DEFAULT 0,
+    tasks_summary TEXT
 );
 
 -- 4. Tasks Table

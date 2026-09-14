@@ -8,7 +8,9 @@ import {
   Briefcase,
   Users,
   Settings,
-  FolderOpen
+  FolderOpen,
+  History,
+  AlertTriangle
 } from 'lucide-react';
 
 interface Project {
@@ -22,10 +24,27 @@ interface Project {
   completed_tasks: number;
   owner_id: number | null;
   sub_owner_id: number | null;
+  created_by?: number | null;
+  creator_name?: string;
   owner_name?: string;
   sub_owner_name?: string;
   members?: { user_id: number; name: string; role: string }[];
   departments?: { department_id: number; name: string }[];
+}
+
+interface DeletionLog {
+  id: number;
+  project_id: number;
+  project_name: string;
+  project_description: string;
+  created_by_id: number | null;
+  created_by_name: string;
+  deleted_by_id: number;
+  deleted_by_name: string;
+  deleted_by_email: string;
+  deleted_at: string;
+  total_tasks: number;
+  tasks_summary: string;
 }
 
 interface Task {
@@ -68,6 +87,11 @@ export const ProjectView: React.FC = () => {
   const [team, setTeam] = useState<TeamMember[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
 
+  // Deletion logs modal state (Admin only)
+  const [showDeletionLogs, setShowDeletionLogs] = useState(false);
+  const [deletionLogs, setDeletionLogs] = useState<DeletionLog[]>([]);
+  const [loadingLogs, setLoadingLogs] = useState(false);
+
   // Modals / forms state
   const [showAddProject, setShowAddProject] = useState(false);
   const [showEditProject, setShowEditProject] = useState(false);
@@ -90,13 +114,23 @@ export const ProjectView: React.FC = () => {
   const [selectedTaskMembers, setSelectedTaskMembers] = useState<number[]>([]);
   const [selectedTaskDepts, setSelectedTaskDepts] = useState<number[]>([]);
 
-  const loadData = async () => {
+  const loadData = async (targetProjectId?: number) => {
     try {
       const projRes = await fetchWithAuth('/api/projects');
       if (projRes.ok) {
-        const projData = await projRes.json();
+        const projData: Project[] = await projRes.json();
         setProjects(projData);
-        if (projData.length > 0 && selectedProjectId === null) {
+        if (targetProjectId) {
+          setSelectedProjectId(targetProjectId);
+        } else if (selectedProjectId !== null) {
+          // If current selected project still exists, keep it; otherwise pick first
+          const exists = projData.some(p => p.id === selectedProjectId);
+          if (!exists && projData.length > 0) {
+            setSelectedProjectId(projData[0].id);
+          } else if (projData.length === 0) {
+            setSelectedProjectId(null);
+          }
+        } else if (projData.length > 0) {
           setSelectedProjectId(projData[0].id);
         }
       }
@@ -144,8 +178,13 @@ export const ProjectView: React.FC = () => {
 
   const openAddProjectModal = () => {
     resetProjectForm();
-    // If user is Lead, pre-select their department
-    if (user?.role === 'Lead' && user.department_id) {
+    // Default Owner to current logged-in user and select them in members
+    if (user?.id) {
+      setNewProjectOwner(user.id);
+      setSelectedProjMembers([user.id]);
+    }
+    // If user has a department, pre-select it
+    if (user?.department_id) {
       setSelectedProjDepts([user.department_id]);
     }
     setShowAddProject(true);
@@ -178,10 +217,7 @@ export const ProjectView: React.FC = () => {
         const createdProj = await res.json();
         resetProjectForm();
         setShowAddProject(false);
-        if (createdProj && createdProj.id) {
-          setSelectedProjectId(createdProj.id);
-        }
-        await loadData();
+        await loadData(createdProj?.id);
       } else {
         const errData = await res.json().catch(() => ({}));
         alert(errData.error || 'Thêm dự án thất bại. Vui lòng thử lại.');
@@ -232,12 +268,12 @@ export const ProjectView: React.FC = () => {
     setNewProjectEnd('');
     setNewProjectOwner(user?.id || team[0]?.id || 0);
     setNewProjectSubOwner(0);
-    setSelectedProjMembers([]);
-    setSelectedProjDepts([]);
+    setSelectedProjMembers(user?.id ? [user.id] : []);
+    setSelectedProjDepts(user?.department_id ? [user.department_id] : []);
   };
 
   const handleDeleteProject = async (projectId: number) => {
-    if (!confirm('Bạn có chắc chắn muốn xóa dự án này? Việc này sẽ xóa toàn bộ công việc liên quan.')) return;
+    if (!confirm('Bạn có chắc chắn muốn xóa dự án này? Việc này sẽ xóa toàn bộ công việc liên quan và được lưu vào nhật ký hệ thống.')) return;
     try {
       const res = await fetchWithAuth(`/api/projects/${projectId}`, { method: 'DELETE' });
       if (res.ok) {
@@ -254,6 +290,26 @@ export const ProjectView: React.FC = () => {
     } catch (e: any) {
       console.error(e);
       alert(e.message || 'Lỗi kết nối khi xóa dự án.');
+    }
+  };
+
+  const openDeletionLogsModal = async () => {
+    setShowDeletionLogs(true);
+    setLoadingLogs(true);
+    try {
+      const res = await fetchWithAuth('/api/admin/project-deletion-logs');
+      if (res.ok) {
+        const data = await res.json();
+        setDeletionLogs(data);
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        alert(errData.error || 'Không thể tải nhật ký xóa.');
+      }
+    } catch (e: any) {
+      console.error(e);
+      alert('Lỗi kết nối khi tải nhật ký xóa.');
+    } finally {
+      setLoadingLogs(false);
     }
   };
 
@@ -746,25 +802,33 @@ export const ProjectView: React.FC = () => {
       <div className="project-sidebar">
         <div className="sidebar-header">
           <h3 style={{ fontSize: 16, fontWeight: 700 }}>Dự Án VBE Agency</h3>
-          {(user?.role === 'Admin' || user?.role === 'Lead') && (
-            <button className="btn-outline" style={{ padding: '6px 10px', display: 'flex', alignItems: 'center', gap: 4 }} onClick={openAddProjectModal}>
+          <div style={{ display: 'flex', gap: 6 }}>
+            {user?.role === 'Admin' && (
+              <button 
+                className="btn-outline" 
+                style={{ padding: '6px 8px', display: 'flex', alignItems: 'center', gap: 4 }} 
+                onClick={openDeletionLogsModal}
+                title="Xem nhật ký xóa dự án"
+              >
+                <History size={14} />
+              </button>
+            )}
+            <button className="btn-neon" style={{ padding: '6px 10px', display: 'flex', alignItems: 'center', gap: 4 }} onClick={openAddProjectModal}>
               <Plus size={14} /> Dự án
             </button>
-          )}
+          </div>
         </div>
 
         <div className="project-list">
           {projects.length === 0 ? (
             <div style={{ padding: '24px 12px', textAlign: 'center', color: 'var(--text-secondary)', fontSize: 13 }}>
               <p>Chưa có dự án nào</p>
-              {(user?.role === 'Admin' || user?.role === 'Lead') && (
-                <button 
-                  onClick={openAddProjectModal} 
-                  style={{ marginTop: 8, background: 'none', border: 'none', color: 'var(--accent-orange)', cursor: 'pointer', fontWeight: 600, fontSize: 13, textDecoration: 'underline' }}
-                >
-                  + Tạo dự án mới
-                </button>
-              )}
+              <button 
+                onClick={openAddProjectModal} 
+                style={{ marginTop: 8, background: 'none', border: 'none', color: 'var(--accent-orange)', cursor: 'pointer', fontWeight: 600, fontSize: 13, textDecoration: 'underline' }}
+              >
+                + Tạo dự án mới
+              </button>
             </div>
           ) : (
             projects.map(proj => {
@@ -801,6 +865,11 @@ export const ProjectView: React.FC = () => {
                 <div className="proj-dates">
                   <Calendar size={13} />
                   <span>Thời gian: {activeProject.start_date} đến {activeProject.end_date}</span>
+                  {activeProject.creator_name && (
+                    <span style={{ marginLeft: 12, color: 'var(--text-secondary)' }}>
+                      • Khởi tạo bởi: <strong>{activeProject.creator_name}</strong>
+                    </span>
+                  )}
                 </div>
                 
                 <div className="proj-roles-bar">
@@ -820,8 +889,8 @@ export const ProjectView: React.FC = () => {
                 )}
               </div>
 
-              <div style={{ display: 'flex', gap: 12 }}>
-                {(user?.role === 'Admin' || activeProject.owner_id === user?.id || activeProject.sub_owner_id === user?.id) && (
+              <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+                {(user?.role === 'Admin' || activeProject.created_by === user?.id || activeProject.owner_id === user?.id || activeProject.sub_owner_id === user?.id) && (
                   <button className="btn-outline" style={{ padding: '8px 16px', display: 'flex', alignItems: 'center', gap: 6 }} onClick={() => openEditProjectModal(activeProject)}>
                     <Settings size={16} /> Thiết lập
                   </button>
@@ -829,8 +898,8 @@ export const ProjectView: React.FC = () => {
                 <button className="btn-neon" style={{ padding: '8px 16px', display: 'flex', alignItems: 'center', gap: 6 }} onClick={() => setShowAddTask(true)}>
                   <Plus size={16} /> Tạo Công Việc
                 </button>
-                {(user?.role === 'Admin' || (user?.role === 'Lead' && activeProject.owner_id === user?.id)) && (
-                  <button className="btn-outline" style={{ borderColor: 'var(--accent-orange)', color: 'var(--accent-orange)', padding: '8px 12px' }} onClick={() => handleDeleteProject(activeProject.id)} title="Xóa dự án">
+                {(user?.role === 'Admin' || activeProject.created_by === user?.id) && (
+                  <button className="btn-outline" style={{ borderColor: 'var(--accent-orange)', color: 'var(--accent-orange)', padding: '8px 12px' }} onClick={() => handleDeleteProject(activeProject.id)} title="Xóa dự án (Chỉ người tạo hoặc Admin)">
                     <Trash2 size={16} />
                   </button>
                 )}
@@ -905,19 +974,15 @@ export const ProjectView: React.FC = () => {
             <Briefcase size={56} style={{ marginBottom: 16, color: 'var(--accent-orange)' }} />
             <h3 style={{ fontSize: 20, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 8 }}>Chưa có dự án nào</h3>
             <p style={{ fontSize: 14, maxWidth: 420, color: 'var(--text-secondary)', marginBottom: 24, lineHeight: 1.6 }}>
-              {user?.role === 'Admin' || user?.role === 'Lead'
-                ? 'Bắt đầu quản lý công việc và phân bổ nhân sự cho agency bằng cách tạo dự án đầu tiên!'
-                : 'Bạn chưa được phân công tham gia vào dự án nào. Vui lòng liên hệ Quản trị viên (Admin) hoặc Trưởng phòng (Lead) để được thêm vào dự án.'}
+              Bắt đầu quản lý công việc và phân bổ nhân sự cho agency bằng cách tạo dự án đầu tiên của bạn!
             </p>
-            {(user?.role === 'Admin' || user?.role === 'Lead') && (
-              <button 
-                className="btn-neon" 
-                style={{ padding: '10px 22px', display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, fontWeight: 600 }}
-                onClick={openAddProjectModal}
-              >
-                <Plus size={18} /> Tạo Dự Án Mới
-              </button>
-            )}
+            <button 
+              className="btn-neon" 
+              style={{ padding: '10px 22px', display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, fontWeight: 600 }}
+              onClick={openAddProjectModal}
+            >
+              <Plus size={18} /> Tạo Dự Án Mới
+            </button>
           </div>
         )}
       </div>
@@ -1164,6 +1229,97 @@ export const ProjectView: React.FC = () => {
                 <button type="submit" className="btn-neon" style={{ padding: '8px 16px' }}>Tạo công việc</button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL NHẬT KÝ XÓA DỰ ÁN (DÀNH CHO QUẢN TRỊ VIÊN) */}
+      {showDeletionLogs && (
+        <div className="modal-overlay">
+          <div className="modal-body glass-panel" style={{ maxWidth: 840, width: '90vw' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, borderBottom: '1px solid var(--border-color)', paddingBottom: 12 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <History size={22} style={{ color: 'var(--accent-orange)' }} />
+                <div>
+                  <h3 style={{ margin: 0, color: 'var(--text-primary)', fontSize: 18 }}>Nhật Ký Xóa Dự Án</h3>
+                  <p style={{ margin: '2px 0 0 0', fontSize: 12, color: 'var(--text-secondary)' }}>
+                    Lịch sử chi tiết các dự án đã xóa, người thực hiện và danh sách công việc liên quan
+                  </p>
+                </div>
+              </div>
+              <button 
+                className="btn-outline" 
+                style={{ padding: '4px 10px', fontSize: 14 }} 
+                onClick={() => setShowDeletionLogs(false)}
+              >
+                ✕
+              </button>
+            </div>
+
+            {loadingLogs ? (
+              <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-secondary)' }}>
+                Đang tải nhật ký xóa...
+              </div>
+            ) : deletionLogs.length === 0 ? (
+              <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-secondary)' }}>
+                <Briefcase size={36} style={{ marginBottom: 8, opacity: 0.5 }} />
+                <p>Chưa có dự án nào bị xóa trong hệ thống.</p>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12, maxHeight: '60vh', overflowY: 'auto', paddingRight: 6 }}>
+                {deletionLogs.map(log => (
+                  <div 
+                    key={log.id} 
+                    style={{ 
+                      background: '#ffffff', 
+                      border: '1px solid var(--border-color)', 
+                      borderRadius: 8, 
+                      padding: '14px 16px',
+                      boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
+                    }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
+                      <span style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)' }}>
+                        {log.project_name}
+                      </span>
+                      <span style={{ fontSize: 11, background: '#fee2e2', color: '#dc2626', padding: '2px 8px', borderRadius: 4, fontWeight: 600 }}>
+                        Đã xóa: {log.deleted_at}
+                      </span>
+                    </div>
+
+                    {log.project_description && (
+                      <p style={{ fontSize: 13, color: 'var(--text-secondary)', margin: '0 0 8px 0' }}>
+                        {log.project_description}
+                      </p>
+                    )}
+
+                    <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', fontSize: 12, color: 'var(--text-secondary)', background: '#f8fafc', padding: '8px 12px', borderRadius: 6, marginBottom: 8 }}>
+                      <span>👤 <strong>Người khởi tạo:</strong> {log.created_by_name || 'Không rõ'}</span>
+                      <span>🗑️ <strong>Người xóa:</strong> {log.deleted_by_name} ({log.deleted_by_email})</span>
+                      <span>📋 <strong>Số công việc ảnh hưởng:</strong> {log.total_tasks}</span>
+                    </div>
+
+                    {log.tasks_summary && (
+                      <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                        <span style={{ fontWeight: 600 }}>Chi tiết công việc: </span>
+                        {log.tasks_summary}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 20 }}>
+              <button 
+                type="button" 
+                className="btn-neon" 
+                style={{ padding: '8px 20px' }} 
+                onClick={() => setShowDeletionLogs(false)}
+              >
+                Đóng
+              </button>
+            </div>
           </div>
         </div>
       )}
