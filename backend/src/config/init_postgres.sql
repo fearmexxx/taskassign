@@ -21,7 +21,7 @@ CREATE TABLE IF NOT EXISTS users (
 -- 3. Projects Table
 CREATE TABLE IF NOT EXISTS projects (
     id SERIAL PRIMARY KEY,
-    name VARCHAR(255) NOT NULL UNIQUE,
+    name VARCHAR(255) NOT NULL,
     description TEXT,
     status VARCHAR(50) CHECK (status IN ('Planning', 'Active', 'Completed', 'OnHold')) DEFAULT 'Active',
     start_date VARCHAR(50),

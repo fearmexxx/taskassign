@@ -431,22 +431,28 @@ app.get('/api/projects', authenticateToken, async (req, res) => {
 // Create project
 app.post('/api/projects', authenticateToken, requireRole(['Admin', 'Lead']), async (req, res) => {
   const { name, description, status, start_date, end_date, owner_id, sub_owner_id, members, departments } = req.body;
-  if (!name) return res.status(400).json({ error: 'Tên dự án là bắt buộc' });
+  if (!name || !name.trim()) return res.status(400).json({ error: 'Tên dự án là bắt buộc' });
 
   try {
+    const trimmedName = name.trim();
     const defaultOwnerId = owner_id || req.user.id;
     const result = await dbRun(
       `INSERT INTO projects (name, description, status, start_date, end_date, owner_id, sub_owner_id) 
        VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [name, description, status || 'Active', start_date, end_date, defaultOwnerId, sub_owner_id || null]
+      [trimmedName, description || '', status || 'Active', start_date || null, end_date || null, defaultOwnerId, sub_owner_id || null]
     );
 
     const projectId = result.lastID;
 
-    // Save members mappings
-    if (Array.isArray(members) && members.length > 0) {
-      for (let userId of members) {
-        await dbRun(`INSERT INTO project_members (project_id, user_id) VALUES (?, ?)`, [projectId, userId]);
+    // Build complete member list (ensure owner and creator are included so they have access)
+    let memberSet = new Set(Array.isArray(members) ? members : []);
+    if (defaultOwnerId) memberSet.add(Number(defaultOwnerId));
+    if (sub_owner_id) memberSet.add(Number(sub_owner_id));
+    if (req.user.id) memberSet.add(Number(req.user.id));
+
+    for (let userId of memberSet) {
+      if (userId) {
+        await dbRun(`INSERT INTO project_members (project_id, user_id) VALUES (?, ?) ON CONFLICT DO NOTHING`, [projectId, userId]);
       }
     }
 
@@ -458,12 +464,18 @@ app.post('/api/projects', authenticateToken, requireRole(['Admin', 'Lead']), asy
     }
 
     for (let deptId of targetDepts) {
-      await dbRun(`INSERT INTO project_departments (project_id, department_id) VALUES (?, ?)`, [projectId, deptId]);
+      if (deptId) {
+        await dbRun(`INSERT INTO project_departments (project_id, department_id) VALUES (?, ?) ON CONFLICT DO NOTHING`, [projectId, deptId]);
+      }
     }
 
-    res.status(201).json({ id: projectId, name, description, status: status || 'Active', start_date, end_date });
+    res.status(201).json({ id: projectId, name: trimmedName, description, status: status || 'Active', start_date, end_date });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error("Create project error:", err);
+    if (err.code === '23505' || (err.message && err.message.includes('unique'))) {
+      return res.status(400).json({ error: `Tên dự án "${name}" đã tồn tại. Vui lòng chọn tên khác hoặc phân biệt tên.` });
+    }
+    res.status(500).json({ error: err.message || 'Lỗi hệ thống khi tạo dự án' });
   }
 });
 
@@ -522,7 +534,11 @@ app.put('/api/projects/:id', authenticateToken, async (req, res) => {
 
     res.json({ message: 'Cập nhật dự án thành công' });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error("Update project error:", err);
+    if (err.code === '23505' || (err.message && err.message.includes('unique'))) {
+      return res.status(400).json({ error: `Tên dự án "${name}" đã tồn tại trên một dự án khác.` });
+    }
+    res.status(500).json({ error: err.message || 'Lỗi khi cập nhật dự án' });
   }
 });
 

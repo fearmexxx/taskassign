@@ -162,7 +162,7 @@ export const ProjectView: React.FC = () => {
       const res = await fetchWithAuth('/api/projects', {
         method: 'POST',
         body: JSON.stringify({
-          name: newProjectName,
+          name: newProjectName.trim(),
           description: newProjectDesc,
           start_date: newProjectStart,
           end_date: newProjectEnd,
@@ -175,9 +175,13 @@ export const ProjectView: React.FC = () => {
       });
 
       if (res.ok) {
+        const createdProj = await res.json();
         resetProjectForm();
         setShowAddProject(false);
-        loadData();
+        if (createdProj && createdProj.id) {
+          setSelectedProjectId(createdProj.id);
+        }
+        await loadData();
       } else {
         const errData = await res.json().catch(() => ({}));
         alert(errData.error || 'Thêm dự án thất bại. Vui lòng thử lại.');
@@ -750,25 +754,39 @@ export const ProjectView: React.FC = () => {
         </div>
 
         <div className="project-list">
-          {projects.map(proj => {
-            const completion = proj.total_tasks > 0 ? Math.round((proj.completed_tasks / proj.total_tasks) * 100) : 0;
-            return (
-              <div 
-                key={proj.id} 
-                className={`project-item ${selectedProjectId === proj.id ? 'active' : ''}`}
-                onClick={() => setSelectedProjectId(proj.id)}
-              >
-                <div className="project-item-name">{proj.name}</div>
-                <div className="project-progress-bar">
-                  <div className="project-progress-fill" style={{ width: `${completion}%` }} />
+          {projects.length === 0 ? (
+            <div style={{ padding: '24px 12px', textAlign: 'center', color: 'var(--text-secondary)', fontSize: 13 }}>
+              <p>Chưa có dự án nào</p>
+              {(user?.role === 'Admin' || user?.role === 'Lead') && (
+                <button 
+                  onClick={openAddProjectModal} 
+                  style={{ marginTop: 8, background: 'none', border: 'none', color: 'var(--accent-orange)', cursor: 'pointer', fontWeight: 600, fontSize: 13, textDecoration: 'underline' }}
+                >
+                  + Tạo dự án mới
+                </button>
+              )}
+            </div>
+          ) : (
+            projects.map(proj => {
+              const completion = proj.total_tasks > 0 ? Math.round((proj.completed_tasks / proj.total_tasks) * 100) : 0;
+              return (
+                <div 
+                  key={proj.id} 
+                  className={`project-item ${selectedProjectId === proj.id ? 'active' : ''}`}
+                  onClick={() => setSelectedProjectId(proj.id)}
+                >
+                  <div className="project-item-name">{proj.name}</div>
+                  <div className="project-progress-bar">
+                    <div className="project-progress-fill" style={{ width: `${completion}%` }} />
+                  </div>
+                  <div className="project-item-meta">
+                    <span>{completion}% Hoàn thành</span>
+                    <span>{proj.completed_tasks}/{proj.total_tasks} Việc</span>
+                  </div>
                 </div>
-                <div className="project-item-meta">
-                  <span>{completion}% Hoàn thành</span>
-                  <span>{proj.completed_tasks}/{proj.total_tasks} Việc</span>
-                </div>
-              </div>
-            );
-          })}
+              );
+            })
+          )}
         </div>
       </div>
 
@@ -883,10 +901,23 @@ export const ProjectView: React.FC = () => {
             </div>
           </>
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flex: 1, color: 'var(--text-secondary)' }}>
-            <Briefcase size={48} style={{ marginBottom: 16, color: 'var(--text-muted)' }} />
-            <h3>Chưa có dự án nào</h3>
-            <p style={{ fontSize: 14, marginTop: 6 }}>Vui lòng thêm mới dự án của agency để bắt đầu!</p>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flex: 1, color: 'var(--text-secondary)', padding: '40px 20px', textAlign: 'center' }}>
+            <Briefcase size={56} style={{ marginBottom: 16, color: 'var(--accent-orange)' }} />
+            <h3 style={{ fontSize: 20, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 8 }}>Chưa có dự án nào</h3>
+            <p style={{ fontSize: 14, maxWidth: 420, color: 'var(--text-secondary)', marginBottom: 24, lineHeight: 1.6 }}>
+              {user?.role === 'Admin' || user?.role === 'Lead'
+                ? 'Bắt đầu quản lý công việc và phân bổ nhân sự cho agency bằng cách tạo dự án đầu tiên!'
+                : 'Bạn chưa được phân công tham gia vào dự án nào. Vui lòng liên hệ Quản trị viên (Admin) hoặc Trưởng phòng (Lead) để được thêm vào dự án.'}
+            </p>
+            {(user?.role === 'Admin' || user?.role === 'Lead') && (
+              <button 
+                className="btn-neon" 
+                style={{ padding: '10px 22px', display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, fontWeight: 600 }}
+                onClick={openAddProjectModal}
+              >
+                <Plus size={18} /> Tạo Dự Án Mới
+              </button>
+            )}
           </div>
         )}
       </div>

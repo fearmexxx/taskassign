@@ -197,7 +197,7 @@ const initDatabase = () => {
         runCreateTable(`
           CREATE TABLE IF NOT EXISTS projects (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL UNIQUE,
+            name TEXT NOT NULL,
             description TEXT,
             status TEXT CHECK(status IN ('Planning', 'Active', 'Completed', 'OnHold')) DEFAULT 'Active',
             start_date TEXT,
@@ -356,6 +356,20 @@ const initDatabase = () => {
             }
             res();
           });
+        });
+      })
+      .then(() => {
+        // Gỡ bỏ ràng buộc UNIQUE trên tên dự án (projects_name_key) để các agency có thể tạo dự án cùng tên hoặc không bị lỗi cản trở
+        return new Promise((res) => {
+          if (isPostgres) {
+            pgPool.query(`ALTER TABLE projects DROP CONSTRAINT IF EXISTS projects_name_key`, (err) => {
+              if (err) console.warn("Notice: DROP CONSTRAINT projects_name_key:", err.message);
+              else console.log("Database: Dropped unique constraint projects_name_key on projects table.");
+              res();
+            });
+          } else {
+            res();
+          }
         });
       })
       .then(() => {
