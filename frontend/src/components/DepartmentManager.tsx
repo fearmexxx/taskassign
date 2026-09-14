@@ -600,10 +600,12 @@ export const DepartmentManager: React.FC = () => {
                   ))}
                 </select>
               </div>
-              <div className="form-group">
-                <label>Lương cơ bản (VND)</label>
-                <input required type="number" placeholder="15000000" value={userSalary} onChange={e => setUserSalary(e.target.value)} />
-              </div>
+              {user?.email === 'vinh@vbe.vn' && (
+                <div className="form-group">
+                  <label>Lương cơ bản (VND)</label>
+                  <input required type="number" placeholder="15000000" value={userSalary} onChange={e => setUserSalary(e.target.value)} />
+                </div>
+              )}
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, marginTop: 24 }}>
                 <button type="button" className="btn-outline" style={{ padding: '8px 16px' }} onClick={closeUserModal}>Hủy</button>
                 <button type="submit" className="btn-neon" style={{ padding: '8px 16px' }}>Lưu lại</button>

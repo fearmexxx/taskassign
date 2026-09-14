@@ -62,7 +62,11 @@ const AppContent: React.FC = () => {
       case 'reports':
         return <WorkReports />;
       case 'salary':
-        return <SalaryManager />;
+        return user.email === 'vinh@vbe.vn' ? (
+          <SalaryManager />
+        ) : (
+          <Dashboard onCheckInChange={setIsCheckedIn} setActiveTab={setActiveTab} />
+        );
       case 'profile':
         return <UserProfile />;
       default:
@@ -212,24 +216,26 @@ const AppContent: React.FC = () => {
           <span>Lịch & Ca</span>
         </button>
 
-        <button 
-          onClick={() => setActiveTab('salary')} 
-          style={{
-            background: 'none',
-            border: 'none',
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            gap: 2,
-            color: activeTab === 'salary' ? '#4f46e5' : '#64748b',
-            cursor: 'pointer',
-            fontSize: 10,
-            fontWeight: activeTab === 'salary' ? 700 : 500
-          }}
-        >
-          <Wallet size={20} />
-          <span>Bảng lương</span>
-        </button>
+        {user.email === 'vinh@vbe.vn' && (
+          <button 
+            onClick={() => setActiveTab('salary')} 
+            style={{
+              background: 'none',
+              border: 'none',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              gap: 2,
+              color: activeTab === 'salary' ? '#4f46e5' : '#64748b',
+              cursor: 'pointer',
+              fontSize: 10,
+              fontWeight: activeTab === 'salary' ? 700 : 500
+            }}
+          >
+            <Wallet size={20} />
+            <span>Bảng lương</span>
+          </button>
+        )}
 
         {user.role === 'Admin' || user.role === 'Lead' ? (
           <button 

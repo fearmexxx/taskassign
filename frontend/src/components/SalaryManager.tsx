@@ -19,6 +19,39 @@ interface SalaryReportRow {
 
 export const SalaryManager: React.FC = () => {
   const { user, fetchWithAuth } = useAuth();
+
+  if (user?.email !== 'vinh@vbe.vn') {
+    return (
+      <div style={{
+        flex: 1,
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 40,
+        textAlign: 'center',
+        background: 'var(--bg-dark)'
+      }}>
+        <div style={{
+          background: '#ffffff',
+          border: '1px solid var(--border-color)',
+          borderRadius: 12,
+          padding: 32,
+          maxWidth: 480,
+          boxShadow: '0 4px 12px rgba(0,0,0,0.05)'
+        }}>
+          <DollarSign size={48} color="#ef4444" style={{ marginBottom: 16 }} />
+          <h2 style={{ fontSize: 20, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 8 }}>
+            Truy cập bị giới hạn
+          </h2>
+          <p style={{ fontSize: 14, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
+            Dữ liệu bảng công và lương tổng hợp được bảo mật và chỉ cấp quyền truy cập duy nhất cho Quản trị viên cấp cao (<strong>vinh@vbe.vn</strong>).
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   const [report, setReport] = useState<SalaryReportRow[]>([]);
   const [selectedMonth, setSelectedMonth] = useState(() => {
     return new Date().toISOString().slice(0, 7); // Default YYYY-MM
@@ -52,9 +85,6 @@ export const SalaryManager: React.FC = () => {
 
   useEffect(() => {
     loadReport();
-    if (user?.role === 'Member') {
-      loadPersonalLogs();
-    }
   }, [selectedMonth]);
 
   const getMonthOptions = () => {

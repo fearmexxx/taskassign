@@ -804,7 +804,10 @@ app.get('/api/attendance/today', authenticateToken, (req, res) => {
   );
 });
 
-// Get team attendance status today (Admin: all agency; Lead: department members; Member: department members)
+// Get team attendance status today:
+// - Admin (vinh@vbe.vn): all agency
+// - Lead (Trưởng phòng): department members
+// - Member (Nhân viên): only self
 app.get('/api/attendance/today-team', authenticateToken, async (req, res) => {
   try {
     const today = getVietnamTime().dateString;
@@ -818,21 +821,16 @@ app.get('/api/attendance/today-team', authenticateToken, async (req, res) => {
     `;
     const params = [today];
 
-    if (req.user.role === 'Admin') {
+    if (req.user.email === 'vinh@vbe.vn' || req.user.role === 'Admin') {
       // Admin sees everyone in the agency
     } else if (req.user.role === 'Lead') {
       // Lead sees staff in their department or self
       query += ` WHERE (u.department_id = ? OR u.id = ?)`;
       params.push(req.user.department_id, req.user.id);
     } else {
-      // Member sees colleagues in their department or self
-      if (req.user.department_id) {
-        query += ` WHERE (u.department_id = ? OR u.id = ?)`;
-        params.push(req.user.department_id, req.user.id);
-      } else {
-        query += ` WHERE u.id = ?`;
-        params.push(req.user.id);
-      }
+      // Member can ONLY see their own attendance status
+      query += ` WHERE u.id = ?`;
+      params.push(req.user.id);
     }
 
     query += `
@@ -1058,10 +1056,31 @@ app.post('/api/attendance/checkout', authenticateToken, (req, res) => {
 });
 
 // Get user's monthly attendance logs
-app.get('/api/attendance/logs', authenticateToken, (req, res) => {
-  let userId = req.user.id;
-  if ((req.query.user_id && req.user.role === 'Admin') || (req.query.user_id && req.user.role === 'Lead')) {
-    userId = req.query.user_id;
+// - vinh@vbe.vn (Admin): can view any user's logs
+// - Lead: can view logs of users in their department or self
+// - Member: can ONLY view self logs
+app.get('/api/attendance/logs', authenticateToken, async (req, res) => {
+  let targetUserId = req.user.id;
+
+  if (req.query.user_id && req.query.user_id != req.user.id) {
+    if (req.user.email === 'vinh@vbe.vn' || req.user.role === 'Admin') {
+      targetUserId = req.query.user_id;
+    } else if (req.user.role === 'Lead') {
+      // Check if target user is in the same department
+      try {
+        const targetUser = await dbGet(`SELECT id, department_id FROM users WHERE id = ?`, [req.query.user_id]);
+        if (targetUser && targetUser.department_id === req.user.department_id) {
+          targetUserId = req.query.user_id;
+        } else {
+          return res.status(403).json({ error: 'Bạn chỉ có quyền xem chấm công của nhân sự trong phòng ban mình phụ trách' });
+        }
+      } catch (err) {
+        return res.status(500).json({ error: err.message });
+      }
+    } else {
+      // Member can never view other's logs
+      return res.status(403).json({ error: 'Nhân viên chỉ có quyền xem chấm công của chính mình' });
+    }
   }
 
   db.all(
@@ -1070,7 +1089,7 @@ app.get('/api/attendance/logs', authenticateToken, (req, res) => {
      JOIN users u ON a.user_id = u.id
      WHERE a.user_id = ?
      ORDER BY a.date DESC`,
-    [userId],
+    [targetUserId],
     (err, rows) => {
       if (err) return res.status(500).json({ error: err.message });
       res.json(rows);
@@ -1101,8 +1120,12 @@ app.get('/api/attendance/admin-logs', authenticateToken, requireRole(['Admin', '
   });
 });
 
-// GET /api/attendance/salary-report
+// GET /api/attendance/salary-report - CHỈ DÀNH RIÊNG CHO CẤP QUẢN TRỊ CAO NHẤT (vinh@vbe.vn)
 app.get('/api/attendance/salary-report', authenticateToken, async (req, res) => {
+  if (req.user.email !== 'vinh@vbe.vn') {
+    return res.status(403).json({ error: 'Chỉ cấp quản trị cao nhất (vinh@vbe.vn) mới có quyền truy cập bảng lương' });
+  }
+
   const month = req.query.month || getVietnamTime().dateString.slice(0, 7); // YYYY-MM
   
   try {
@@ -1112,14 +1135,6 @@ app.get('/api/attendance/salary-report', authenticateToken, async (req, res) => 
       LEFT JOIN departments d ON u.department_id = d.id
     `;
     const queryParams = [];
-
-    if (req.user.role === 'Member') {
-      usersQuery += ` WHERE u.id = ?`;
-      queryParams.push(req.user.id);
-    } else if (req.user.role === 'Lead') {
-      usersQuery += ` WHERE u.department_id = ? OR u.id = ?`;
-      queryParams.push(req.user.department_id, req.user.id);
-    }
 
     const users = await dbAll(usersQuery, queryParams);
 

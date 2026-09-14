@@ -277,13 +277,15 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, isChe
             <span>Báo cáo ngày</span>
           </div>
 
-          <div 
-            className={`menu-item ${activeTab === 'salary' ? 'active' : ''}`}
-            onClick={() => setActiveTab('salary')}
-          >
-            <Wallet className="menu-item-icon" />
-            <span>Bảng công & Lương</span>
-          </div>
+          {user.email === 'vinh@vbe.vn' && (
+            <div 
+              className={`menu-item ${activeTab === 'salary' ? 'active' : ''}`}
+              onClick={() => setActiveTab('salary')}
+            >
+              <Wallet className="menu-item-icon" />
+              <span>Bảng công & Lương</span>
+            </div>
+          )}
         </nav>
       </div>
 

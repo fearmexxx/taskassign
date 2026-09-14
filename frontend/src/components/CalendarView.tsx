@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { Calendar, ChevronLeft, ChevronRight, Clock } from 'lucide-react';
+import { Calendar, ChevronLeft, ChevronRight, Clock, UserCheck } from 'lucide-react';
 
 interface Task {
   id: number;
@@ -17,6 +17,15 @@ interface AttendanceLog {
   status: 'Present' | 'Late' | 'Absent';
 }
 
+interface StaffMember {
+  id: number;
+  name: string;
+  email: string;
+  role: string;
+  department_id: number | null;
+  department_name?: string;
+}
+
 export const CalendarView: React.FC = () => {
   const { user, fetchWithAuth } = useAuth();
   
@@ -24,8 +33,37 @@ export const CalendarView: React.FC = () => {
   const [attendanceLogs, setAttendanceLogs] = useState<AttendanceLog[]>([]);
   const [currentDate, setCurrentDate] = useState(new Date());
 
+  // Staff list for Admin (vinh@vbe.vn) or Lead
+  const [staffList, setStaffList] = useState<StaffMember[]>([]);
+  const [selectedUserId, setSelectedUserId] = useState<number>(user?.id || 0);
+
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
+
+  // Load staff list if Admin or Lead
+  useEffect(() => {
+    if (user?.role === 'Admin' || user?.role === 'Lead') {
+      const fetchStaff = async () => {
+        try {
+          const res = await fetchWithAuth('/api/users');
+          if (res.ok) {
+            const data: StaffMember[] = await res.json();
+            if (user?.role === 'Lead') {
+              // Lead only sees staff in their department or self
+              const filtered = data.filter(u => u.department_id === user.department_id || u.id === user.id);
+              setStaffList(filtered);
+            } else {
+              // Admin sees all agency staff
+              setStaffList(data);
+            }
+          }
+        } catch (e) {
+          console.error('Lỗi khi tải danh sách nhân sự cho lịch:', e);
+        }
+      };
+      fetchStaff();
+    }
+  }, [user]);
 
   const loadData = async () => {
     try {
@@ -34,7 +72,8 @@ export const CalendarView: React.FC = () => {
         setTasks(await taskRes.json());
       }
 
-      const attRes = await fetchWithAuth(`/api/attendance/logs?user_id=${user?.id}`);
+      const queryUser = selectedUserId || user?.id;
+      const attRes = await fetchWithAuth(`/api/attendance/logs?user_id=${queryUser}`);
       if (attRes.ok) {
         setAttendanceLogs(await attRes.json());
       }
@@ -45,7 +84,7 @@ export const CalendarView: React.FC = () => {
 
   useEffect(() => {
     loadData();
-  }, [currentDate]);
+  }, [currentDate, selectedUserId]);
 
   const firstDayIndex = new Date(year, month, 1).getDay();
   const lastDay = new Date(year, month + 1, 0).getDate();
@@ -323,20 +362,50 @@ export const CalendarView: React.FC = () => {
 
       {/* MAIN CALENDAR GRID */}
       <div className="calendar-main-panel glass-panel">
-        <div className="calendar-header">
+        <div className="calendar-header" style={{ flexWrap: 'wrap', gap: 12 }}>
           <div className="month-title">
             <Calendar className="text-cyan-400" />
             <span>
               {currentDate.toLocaleString('vi-VN', { month: 'long' })} Năm {year}
             </span>
           </div>
-          <div className="nav-btns">
-            <button className="btn-outline nav-btn" onClick={prevMonth}>
-              <ChevronLeft size={16} />
-            </button>
-            <button className="btn-outline nav-btn" onClick={nextMonth}>
-              <ChevronRight size={16} />
-            </button>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            {(user?.role === 'Admin' || user?.role === 'Lead') && staffList.length > 0 && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <UserCheck size={16} color="var(--text-secondary)" />
+                <select
+                  value={selectedUserId}
+                  onChange={(e) => setSelectedUserId(Number(e.target.value))}
+                  style={{
+                    padding: '6px 12px',
+                    borderRadius: 6,
+                    border: '1px solid var(--border-color)',
+                    background: '#ffffff',
+                    color: 'var(--text-primary)',
+                    fontSize: 13,
+                    fontWeight: 500,
+                    outline: 'none',
+                    cursor: 'pointer'
+                  }}
+                >
+                  {staffList.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.name} {m.id === user?.id ? '(Tôi)' : ''} - {m.role === 'Lead' ? 'Trưởng phòng' : m.role === 'Admin' ? 'Quản trị viên' : 'Nhân viên'}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            <div className="nav-btns">
+              <button className="btn-outline nav-btn" onClick={prevMonth} title="Tháng trước">
+                <ChevronLeft size={16} />
+              </button>
+              <button className="btn-outline nav-btn" onClick={nextMonth} title="Tháng sau">
+                <ChevronRight size={16} />
+              </button>
+            </div>
           </div>
         </div>
 
@@ -391,7 +460,9 @@ export const CalendarView: React.FC = () => {
       <div className="side-stats-panel glass-panel">
         <h3 style={{ fontSize: 16, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8 }}>
           <Clock size={16} className="text-cyan-400" />
-          Bảng Công Cá Nhân
+          {selectedUserId === user?.id 
+            ? 'Bảng Công Của Tôi' 
+            : `Bảng Công: ${staffList.find(s => s.id === selectedUserId)?.name || 'Nhân sự'}`}
         </h3>
         
         <div className="att-legend">
