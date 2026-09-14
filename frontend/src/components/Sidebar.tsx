@@ -100,9 +100,9 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, isChe
           border-color: rgba(255, 255, 255, 0.12);
         }
         .profile-card.active-profile {
-          background: rgba(217, 119, 6, 0.12);
-          border-color: rgba(217, 119, 6, 0.4);
-          box-shadow: 0 0 12px rgba(217, 119, 6, 0.1);
+          background: rgba(0, 242, 254, 0.08);
+          border-color: rgba(0, 242, 254, 0.25);
+          box-shadow: inset 0 0 10px rgba(0, 242, 254, 0.05);
         }
         .profile-avatar {
           width: 44px;
