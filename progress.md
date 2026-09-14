@@ -134,6 +134,20 @@ This log tracks the build history, feature additions, styling changes, and deplo
   - Cập nhật các nút chọn nhanh tài khoản đăng nhập theo đúng 3 phòng ban mới.
   - Xử lý hiển thị thân thiện trên Sidebar: tài khoản Admin không có phòng ban sẽ hiển thị nhãn chức danh *"Quản trị viên • Ban Lãnh Đạo / Quản Trị Chung"*.
 
+### Phase 13: Phân Hệ Hồ Sơ Cá Nhân (User Profile & Account Management)
+- **Cập nhật Thông tin & Đổi mật khẩu**:
+  - Cho phép người dùng trực tiếp cập nhật họ tên và email cá nhân (tự động đồng bộ hóa trên toàn hệ thống và localStorage).
+  - Tích hợp tính năng đổi mật khẩu có xác thực mật khẩu hiện tại (`currentPassword`) và kiểm tra độ dài tối thiểu 6 ký tự.
+- **Theo dõi Chấm công Cá nhân**:
+  - Thống kê trực quan 4 chỉ số: Tổng lượt chấm công, Tỷ lệ đúng giờ (%), Số lượt đi muộn, và Số lượt làm việc từ xa (Remote > 200m).
+  - Bảng lịch sử chấm công chi tiết theo ngày: giờ vào/ra, trạng thái (Đúng giờ/Đi muộn), phân loại địa điểm (Tại VP / Ngoài VP kèm khoảng cách mét) và ghi chú lý do.
+- **Lịch sử Báo cáo Công việc (Daily Work Reports)**:
+  - Xem danh sách toàn bộ báo cáo ngày do chính mình nộp lên hệ thống.
+  - Phân loại rõ ràng 4 mục: Việc đã hoàn thành, Việc đang làm, Kế hoạch ngày mai, Khó khăn/đề xuất, kèm trạng thái duyệt và nhận xét từ Quản lý.
+- **Tích hợp Điều hướng Đa nền tảng**:
+  - Nhấp vào Profile Card hoặc menu "Hồ sơ cá nhân" trên Sidebar Desktop để mở nhanh.
+  - Nhấp vào User Card trên Mobile Top Bar để mở nhanh trên điện thoại di động.
+
 ---
 
 ## 🚀 Deployment Plan (Vercel + Neon + Render)
@@ -142,6 +156,7 @@ The system is configured to roll out on the following platforms:
 1. **Frontend**: Deployed on **Vercel** (connects to the Git repository, builds `tsc && vite build` and serves static files globally).
 2. **Backend**: Deployed on **Render** (Node.js web service running `node src/server.js`).
 3. **Database**: Migrating SQLite to **Neon PostgreSQL** (serverless Postgres instance with free tier).
+
 
 
 

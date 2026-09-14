@@ -8,6 +8,7 @@ import { CalendarView } from './components/CalendarView';
 import { DepartmentManager } from './components/DepartmentManager';
 import { WorkReports } from './components/WorkReports';
 import { SalaryManager } from './components/SalaryManager';
+import { UserProfile } from './components/UserProfile';
 
 import { 
   LayoutDashboard, 
@@ -16,6 +17,7 @@ import {
   Wallet, 
   Users2, 
   FileSpreadsheet, 
+  User,
   LogOut 
 } from 'lucide-react';
 
@@ -61,6 +63,8 @@ const AppContent: React.FC = () => {
         return <WorkReports />;
       case 'salary':
         return <SalaryManager />;
+      case 'profile':
+        return <UserProfile />;
       default:
         return <Dashboard onCheckInChange={setIsCheckedIn} setActiveTab={setActiveTab} />;
     }
@@ -77,7 +81,11 @@ const AppContent: React.FC = () => {
         justifyContent: 'space-between',
         zIndex: 50
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div 
+          onClick={() => setActiveTab('profile')} 
+          style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}
+          title="Xem hồ sơ cá nhân"
+        >
           <div style={{
             background: 'linear-gradient(135deg, #4f46e5, #00f2fe)',
             color: '#fff',

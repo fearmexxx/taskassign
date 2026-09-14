@@ -137,7 +137,7 @@ app.post('/api/auth/login', (req, res) => {
 // Get Current User Profile Info
 app.get('/api/auth/me', authenticateToken, (req, res) => {
   db.get(
-    `SELECT u.id, u.name, u.email, u.role, u.department_id, d.name as department_name 
+    `SELECT u.id, u.name, u.email, u.role, u.department_id, u.base_salary, d.name as department_name 
      FROM users u 
      LEFT JOIN departments d ON u.department_id = d.id 
      WHERE u.id = ?`,
@@ -148,6 +148,77 @@ app.get('/api/auth/me', authenticateToken, (req, res) => {
       res.json(user);
     }
   );
+});
+
+// Update Current User Profile (Name, Email)
+app.put('/api/auth/profile', authenticateToken, (req, res) => {
+  const { name, email } = req.body;
+  if (!name || !email) {
+    return res.status(400).json({ error: 'Họ tên và email là bắt buộc' });
+  }
+
+  const cleanName = name.trim();
+  const cleanEmail = email.trim().toLowerCase();
+
+  // Kiểm tra email xem có bị trùng với user khác không
+  db.get(`SELECT id FROM users WHERE LOWER(email) = ? AND id != ?`, [cleanEmail, req.user.id], (err, row) => {
+    if (err) return res.status(500).json({ error: err.message });
+    if (row) return res.status(400).json({ error: 'Email này đã được sử dụng bởi tài khoản khác' });
+
+    db.run(
+      `UPDATE users SET name = ?, email = ? WHERE id = ?`,
+      [cleanName, cleanEmail, req.user.id],
+      function(updateErr) {
+        if (updateErr) return res.status(500).json({ error: updateErr.message });
+
+        db.get(
+          `SELECT u.id, u.name, u.email, u.role, u.department_id, u.base_salary, d.name as department_name 
+           FROM users u 
+           LEFT JOIN departments d ON u.department_id = d.id 
+           WHERE u.id = ?`,
+          [req.user.id],
+          (fetchErr, updatedUser) => {
+            if (fetchErr) return res.status(500).json({ error: fetchErr.message });
+            res.json({
+              message: 'Cập nhật thông tin thành công',
+              user: updatedUser
+            });
+          }
+        );
+      }
+    );
+  });
+});
+
+// Change Current User Password
+app.put('/api/auth/change-password', authenticateToken, (req, res) => {
+  const { currentPassword, newPassword } = req.body;
+
+  if (!currentPassword || !newPassword) {
+    return res.status(400).json({ error: 'Vui lòng nhập mật khẩu hiện tại và mật khẩu mới' });
+  }
+
+  if (newPassword.length < 6) {
+    return res.status(400).json({ error: 'Mật khẩu mới phải có ít nhất 6 ký tự' });
+  }
+
+  db.get(`SELECT password FROM users WHERE id = ?`, [req.user.id], (err, user) => {
+    if (err) return res.status(500).json({ error: err.message });
+    if (!user) return res.status(404).json({ error: 'Không tìm thấy người dùng' });
+
+    if (user.password !== currentPassword.toString().trim()) {
+      return res.status(400).json({ error: 'Mật khẩu hiện tại không chính xác' });
+    }
+
+    db.run(
+      `UPDATE users SET password = ? WHERE id = ?`,
+      [newPassword.toString().trim(), req.user.id],
+      function(updateErr) {
+        if (updateErr) return res.status(500).json({ error: updateErr.message });
+        res.json({ message: 'Đổi mật khẩu thành công' });
+      }
+    );
+  });
 });
 
 // --- USER MANAGEMENT ---

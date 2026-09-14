@@ -92,6 +92,12 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, isChe
           border: 1px solid rgba(255, 255, 255, 0.05);
           margin-bottom: 24px;
           position: relative;
+          cursor: pointer;
+          transition: var(--transition-smooth);
+        }
+        .profile-card:hover {
+          background: rgba(255, 255, 255, 0.05);
+          border-color: rgba(255, 255, 255, 0.12);
         }
         .profile-avatar {
           width: 44px;
@@ -200,7 +206,11 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, isChe
           </div>
         </div>
 
-        <div className="profile-card">
+        <div 
+          className={`profile-card ${activeTab === 'profile' ? 'active-profile' : ''}`}
+          onClick={() => setActiveTab('profile')}
+          title="Xem và chỉnh sửa hồ sơ cá nhân"
+        >
           <div className="profile-avatar">
             <User size={20} />
           </div>
@@ -220,6 +230,14 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, isChe
           >
             <LayoutDashboard className="menu-item-icon" />
             <span>Tổng quan</span>
+          </div>
+
+          <div 
+            className={`menu-item ${activeTab === 'profile' ? 'active' : ''}`}
+            onClick={() => setActiveTab('profile')}
+          >
+            <User className="menu-item-icon" />
+            <span>Hồ sơ cá nhân</span>
           </div>
 
           <div 

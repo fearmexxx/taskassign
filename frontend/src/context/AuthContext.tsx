@@ -7,6 +7,7 @@ interface User {
   role: 'Admin' | 'Lead' | 'Member';
   department_id: number | null;
   department_name?: string;
+  base_salary?: number;
 }
 
 interface AuthContextType {
@@ -14,6 +15,7 @@ interface AuthContextType {
   token: string | null;
   login: (email: string, password: string) => Promise<boolean>;
   logout: () => void;
+  updateUser: (updatedUser: Partial<User>) => void;
   isLoading: boolean;
   error: string | null;
   fetchWithAuth: (url: string, options?: RequestInit) => Promise<Response>;
@@ -72,6 +74,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setUser(null);
   };
 
+  const updateUser = (updatedFields: Partial<User>) => {
+    setUser(prev => {
+      if (!prev) return null;
+      const merged = { ...prev, ...updatedFields };
+      localStorage.setItem('tap_user', JSON.stringify(merged));
+      return merged;
+    });
+  };
+
   const fetchWithAuth = async (url: string, options: RequestInit = {}): Promise<Response> => {
     const headers = {
       ...options.headers,
@@ -82,7 +93,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   return (
-    <AuthContext.Provider value={{ user, token, login, logout, isLoading, error, fetchWithAuth }}>
+    <AuthContext.Provider value={{ user, token, login, logout, updateUser, isLoading, error, fetchWithAuth }}>
       {children}
     </AuthContext.Provider>
   );
