@@ -187,465 +187,1009 @@ export const UserProfile: React.FC = () => {
   const roleLabel = user?.role === 'Admin' ? 'Quản trị viên' : user?.role === 'Lead' ? 'Trưởng phòng' : 'Nhân viên';
 
   return (
-    <div className="p-4 sm:p-8 max-w-6xl mx-auto overflow-y-auto" style={{ maxHeight: '100%' }}>
-      {/* Header Banner */}
-      <div className="bg-gradient-to-r from-indigo-700 via-indigo-600 to-blue-600 rounded-2xl p-6 sm:p-8 text-white shadow-lg shadow-indigo-100 mb-8 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
-        <div className="flex items-center gap-5">
-          <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-white/10 backdrop-blur-md border border-white/20 flex items-center justify-center text-2xl sm:text-3xl font-bold text-white shadow-inner">
-            {user?.name?.charAt(0).toUpperCase() || 'U'}
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">{user?.name}</h1>
-              <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold tracking-wide uppercase border ${
-                user?.role === 'Admin' 
-                  ? 'bg-amber-400/20 text-amber-200 border-amber-400/30' 
-                  : user?.role === 'Lead'
-                  ? 'bg-emerald-400/20 text-emerald-200 border-emerald-400/30'
-                  : 'bg-white/20 text-white border-white/30'
-              }`}>
-                {roleLabel}
-              </span>
+    <div className="profile-page-wrapper">
+      <style>{`
+        .profile-page-wrapper {
+          flex: 1;
+          padding: 32px;
+          overflow-y: auto;
+          height: 100%;
+          background: var(--bg-dark);
+          font-family: var(--font-family);
+          color: var(--text-primary);
+        }
+
+        .profile-container {
+          max-width: 1100px;
+          margin: 0 auto;
+        }
+
+        /* Warm Gold & Amber Theme Palette */
+        .profile-banner {
+          background: linear-gradient(135deg, #b45309 0%, #d97706 45%, #f59e0b 100%);
+          border-radius: 16px;
+          padding: 28px 32px;
+          color: #ffffff;
+          box-shadow: 0 10px 25px -5px rgba(217, 119, 6, 0.25), 0 8px 10px -6px rgba(217, 119, 6, 0.2);
+          margin-bottom: 28px;
+          display: flex;
+          flex-direction: row;
+          align-items: center;
+          justify-content: space-between;
+          gap: 20px;
+        }
+
+        .banner-left {
+          display: flex;
+          align-items: center;
+          gap: 20px;
+        }
+
+        .banner-avatar {
+          width: 72px;
+          height: 72px;
+          border-radius: 16px;
+          background: rgba(255, 255, 255, 0.18);
+          backdrop-filter: blur(8px);
+          border: 1px solid rgba(255, 255, 255, 0.3);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 28px;
+          font-weight: 800;
+          color: #ffffff;
+          box-shadow: inset 0 2px 4px rgba(255, 255, 255, 0.2);
+          flex-shrink: 0;
+        }
+
+        .banner-title-group {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          flex-wrap: wrap;
+        }
+
+        .banner-name {
+          font-size: 26px;
+          font-weight: 800;
+          color: #ffffff;
+          letter-spacing: -0.02em;
+          line-height: 1.2;
+        }
+
+        .banner-role-badge {
+          padding: 4px 10px;
+          border-radius: 20px;
+          font-size: 11px;
+          font-weight: 700;
+          text-transform: uppercase;
+          letter-spacing: 0.05em;
+          background: rgba(255, 255, 255, 0.22);
+          color: #ffffff;
+          border: 1px solid rgba(255, 255, 255, 0.35);
+        }
+
+        .banner-subtitle {
+          margin-top: 6px;
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          font-size: 13px;
+          color: #fef3c7;
+          flex-wrap: wrap;
+        }
+
+        .banner-right-badge {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          background: rgba(255, 255, 255, 0.15);
+          backdrop-filter: blur(8px);
+          padding: 10px 18px;
+          border-radius: 12px;
+          border: 1px solid rgba(255, 255, 255, 0.25);
+        }
+
+        /* Nav Tabs */
+        .profile-nav-tabs {
+          display: flex;
+          border-bottom: 2px solid var(--border-color);
+          margin-bottom: 28px;
+          gap: 28px;
+          overflow-x: auto;
+        }
+
+        .profile-nav-tab {
+          padding: 12px 4px 14px 4px;
+          font-size: 14px;
+          font-weight: 600;
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          background: none;
+          border: none;
+          border-bottom: 3px solid transparent;
+          margin-bottom: -2px;
+          color: var(--text-secondary);
+          cursor: pointer;
+          transition: var(--transition-smooth);
+          white-space: nowrap;
+        }
+
+        .profile-nav-tab:hover {
+          color: #d97706;
+        }
+
+        .profile-nav-tab.active {
+          color: #b45309;
+          border-bottom-color: #d97706;
+        }
+
+        /* Forms Layout */
+        .forms-grid {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 24px;
+        }
+
+        .profile-card {
+          background: #ffffff;
+          border-radius: 14px;
+          border: 1px solid var(--border-color);
+          box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+          padding: 24px;
+          display: flex;
+          flex-direction: column;
+          justify-content: space-between;
+        }
+
+        .card-header {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          margin-bottom: 20px;
+          padding-bottom: 14px;
+          border-bottom: 1px solid var(--border-color);
+        }
+
+        .card-icon-box {
+          width: 40px;
+          height: 40px;
+          border-radius: 10px;
+          background: #fef3c7;
+          color: #d97706;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          flex-shrink: 0;
+        }
+
+        .card-header-title {
+          font-size: 16px;
+          font-weight: 700;
+          color: var(--text-primary);
+        }
+
+        .card-header-desc {
+          font-size: 12px;
+          color: var(--text-secondary);
+          margin-top: 2px;
+        }
+
+        .form-group {
+          margin-bottom: 16px;
+        }
+
+        .form-label {
+          display: block;
+          font-size: 11px;
+          font-weight: 700;
+          text-transform: uppercase;
+          letter-spacing: 0.05em;
+          color: var(--text-secondary);
+          margin-bottom: 6px;
+        }
+
+        .input-wrapper {
+          position: relative;
+          display: flex;
+          align-items: center;
+        }
+
+        .input-icon-left {
+          position: absolute;
+          left: 12px;
+          color: var(--text-muted);
+          pointer-events: none;
+        }
+
+        .profile-input {
+          width: 100%;
+          padding: 10px 14px 10px 38px;
+          font-size: 13px;
+          background: #fdfdfd;
+          border: 1px solid var(--border-color);
+          border-radius: 8px;
+          color: var(--text-primary);
+          font-family: var(--font-family);
+          outline: none;
+          transition: var(--transition-smooth);
+        }
+
+        .profile-input:focus {
+          border-color: #d97706;
+          box-shadow: 0 0 0 3px rgba(217, 119, 6, 0.12);
+        }
+
+        .profile-input:disabled {
+          background: #f3f4f6;
+          color: var(--text-muted);
+          cursor: not-allowed;
+        }
+
+        .input-btn-toggle {
+          position: absolute;
+          right: 12px;
+          background: none;
+          border: none;
+          color: var(--text-muted);
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          padding: 2px;
+        }
+
+        .input-btn-toggle:hover {
+          color: var(--text-primary);
+        }
+
+        .two-cols-row {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 14px;
+        }
+
+        .btn-warm-gold {
+          background: linear-gradient(135deg, #d97706, #b45309);
+          color: #ffffff;
+          border: none;
+          padding: 11px 20px;
+          font-size: 13px;
+          font-weight: 600;
+          border-radius: 8px;
+          cursor: pointer;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 8px;
+          transition: var(--transition-smooth);
+          box-shadow: 0 2px 6px rgba(217, 119, 6, 0.25);
+        }
+
+        .btn-warm-gold:hover:not(:disabled) {
+          background: linear-gradient(135deg, #b45309, #92400e);
+          box-shadow: 0 4px 12px rgba(217, 119, 6, 0.35);
+        }
+
+        .btn-warm-gold:disabled {
+          opacity: 0.6;
+          cursor: not-allowed;
+        }
+
+        .btn-dark-slate {
+          background: #1e293b;
+          color: #ffffff;
+          border: none;
+          padding: 11px 20px;
+          font-size: 13px;
+          font-weight: 600;
+          border-radius: 8px;
+          cursor: pointer;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 8px;
+          transition: var(--transition-smooth);
+        }
+
+        .btn-dark-slate:hover:not(:disabled) {
+          background: #0f172a;
+        }
+
+        .btn-dark-slate:disabled {
+          opacity: 0.6;
+          cursor: not-allowed;
+        }
+
+        .alert-box {
+          padding: 10px 14px;
+          border-radius: 8px;
+          font-size: 12px;
+          margin-bottom: 16px;
+          display: flex;
+          align-items: center;
+          gap: 8px;
+        }
+
+        .alert-box.success {
+          background: #ecfdf5;
+          border: 1px solid #a7f3d0;
+          color: #065f46;
+        }
+
+        .alert-box.error {
+          background: #fff1f2;
+          border: 1px solid #fecdd3;
+          color: #9f1239;
+        }
+
+        /* Metric Cards for Attendance */
+        .metrics-grid-4 {
+          display: grid;
+          grid-template-columns: repeat(4, 1fr);
+          gap: 16px;
+          margin-bottom: 24px;
+        }
+
+        .stat-metric-card {
+          background: #ffffff;
+          border: 1px solid var(--border-color);
+          border-radius: 12px;
+          padding: 18px 20px;
+          box-shadow: 0 1px 3px rgba(0,0,0,0.03);
+        }
+
+        .stat-metric-label {
+          font-size: 11px;
+          font-weight: 700;
+          text-transform: uppercase;
+          letter-spacing: 0.05em;
+          color: var(--text-secondary);
+        }
+
+        .stat-metric-val {
+          font-size: 26px;
+          font-weight: 800;
+          color: var(--text-primary);
+          margin-top: 6px;
+          line-height: 1;
+        }
+
+        .stat-metric-val.gold { color: #d97706; }
+        .stat-metric-val.green { color: #059669; }
+        .stat-metric-val.amber { color: #d97706; }
+        .stat-metric-val.warm { color: #b45309; }
+
+        .stat-metric-sub {
+          font-size: 11px;
+          color: var(--text-muted);
+          margin-top: 6px;
+        }
+
+        /* Table Design */
+        .profile-table-card {
+          background: #ffffff;
+          border-radius: 14px;
+          border: 1px solid var(--border-color);
+          box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+          overflow: hidden;
+        }
+
+        .table-top-bar {
+          padding: 16px 20px;
+          border-bottom: 1px solid var(--border-color);
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+        }
+
+        .table-responsive {
+          width: 100%;
+          overflow-x: auto;
+        }
+
+        .custom-table {
+          width: 100%;
+          border-collapse: collapse;
+          text-align: left;
+          font-size: 13px;
+        }
+
+        .custom-table th {
+          background: #fafaf9;
+          padding: 12px 18px;
+          font-size: 11px;
+          font-weight: 700;
+          text-transform: uppercase;
+          letter-spacing: 0.05em;
+          color: var(--text-secondary);
+          border-bottom: 1px solid var(--border-color);
+        }
+
+        .custom-table td {
+          padding: 14px 18px;
+          border-bottom: 1px solid var(--border-color);
+          color: var(--text-primary);
+        }
+
+        .custom-table tr:last-child td {
+          border-bottom: none;
+        }
+
+        .custom-table tr:hover td {
+          background: #fcfbf9;
+        }
+
+        .badge-status {
+          display: inline-flex;
+          align-items: center;
+          padding: 3px 8px;
+          border-radius: 12px;
+          font-size: 11px;
+          font-weight: 600;
+        }
+
+        .badge-status.on-time {
+          background: #ecfdf5;
+          color: #065f46;
+          border: 1px solid #a7f3d0;
+        }
+
+        .badge-status.late {
+          background: #fef3c7;
+          color: #92400e;
+          border: 1px solid #fde68a;
+        }
+
+        .badge-status.remote {
+          background: #fef9c3;
+          color: #854d0e;
+          border: 1px solid #fef08a;
+        }
+
+        .badge-status.office {
+          background: #f3f4f6;
+          color: #374151;
+          border: 1px solid #e5e7eb;
+        }
+
+        /* Reports list cards */
+        .report-item-card {
+          background: #ffffff;
+          border: 1px solid var(--border-color);
+          border-radius: 12px;
+          padding: 18px 20px;
+          margin-bottom: 14px;
+          transition: var(--transition-smooth);
+        }
+
+        .report-item-card:hover {
+          border-color: #d97706;
+          box-shadow: 0 4px 12px rgba(217, 119, 6, 0.08);
+        }
+
+        .report-card-top {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          padding-bottom: 12px;
+          margin-bottom: 12px;
+          border-bottom: 1px solid var(--border-color);
+        }
+
+        .report-details-grid {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 12px;
+          font-size: 12px;
+        }
+
+        .report-field-box {
+          background: #fcfbf9;
+          border: 1px solid #f2ede4;
+          border-radius: 8px;
+          padding: 10px 12px;
+        }
+
+        .report-field-label {
+          font-weight: 700;
+          margin-bottom: 4px;
+          display: flex;
+          align-items: center;
+          gap: 6px;
+        }
+
+        .report-field-content {
+          color: var(--text-primary);
+          line-height: 1.5;
+          white-space: pre-line;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+          .profile-page-wrapper {
+            padding: 14px 12px 80px 12px;
+          }
+          .profile-banner {
+            flex-direction: column;
+            align-items: flex-start;
+            padding: 20px;
+          }
+          .banner-avatar {
+            width: 56px;
+            height: 56px;
+            font-size: 22px;
+          }
+          .banner-name {
+            font-size: 20px;
+          }
+          .banner-right-badge {
+            width: 100%;
+          }
+          .forms-grid {
+            grid-template-columns: 1fr;
+          }
+          .two-cols-row {
+            grid-template-columns: 1fr;
+          }
+          .metrics-grid-4 {
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+          }
+          .report-details-grid {
+            grid-template-columns: 1fr;
+          }
+        }
+      `}</style>
+
+      <div className="profile-container">
+        {/* Header Warm Gold Banner */}
+        <div className="profile-banner">
+          <div className="banner-left">
+            <div className="banner-avatar">
+              {user?.name?.charAt(0).toUpperCase() || 'U'}
             </div>
-            <p className="text-indigo-100 mt-1 flex items-center gap-2 text-sm sm:text-base">
-              <Mail className="w-4 h-4 opacity-80" /> {user?.email}
-              {user?.department_name && (
-                <>
-                  <span className="opacity-40">•</span>
-                  <Building className="w-4 h-4 opacity-80" /> {user?.department_name}
-                </>
-              )}
-            </p>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-3 bg-white/10 backdrop-blur-md px-4 py-2.5 rounded-xl border border-white/15 text-sm">
-          <Shield className="w-5 h-5 text-indigo-200" />
-          <div>
-            <div className="text-xs text-indigo-200 font-medium">Trạng thái tài khoản</div>
-            <div className="font-semibold text-white">Chính thức</div>
-          </div>
-        </div>
-      </div>
-
-      {/* Navigation Tabs */}
-      <div className="flex border-b border-gray-200 mb-8 space-x-2 sm:space-x-8 overflow-x-auto">
-        <button
-          onClick={() => setActiveTab('info')}
-          className={`pb-4 px-2 text-sm font-semibold flex items-center gap-2 whitespace-nowrap transition-all border-b-2 ${
-            activeTab === 'info'
-              ? 'border-indigo-600 text-indigo-600'
-              : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-          }`}
-        >
-          <UserIcon className="w-4 h-4" />
-          Thông tin cá nhân & Đổi mật khẩu
-        </button>
-
-        <button
-          onClick={() => setActiveTab('attendance')}
-          className={`pb-4 px-2 text-sm font-semibold flex items-center gap-2 whitespace-nowrap transition-all border-b-2 ${
-            activeTab === 'attendance'
-              ? 'border-indigo-600 text-indigo-600'
-              : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-          }`}
-        >
-          <Clock className="w-4 h-4" />
-          Lịch sử chấm công
-        </button>
-
-        <button
-          onClick={() => setActiveTab('reports')}
-          className={`pb-4 px-2 text-sm font-semibold flex items-center gap-2 whitespace-nowrap transition-all border-b-2 ${
-            activeTab === 'reports'
-              ? 'border-indigo-600 text-indigo-600'
-              : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-          }`}
-        >
-          <FileText className="w-4 h-4" />
-          Báo cáo công việc đã gửi
-        </button>
-      </div>
-
-      {/* Tab 1: Info & Password */}
-      {activeTab === 'info' && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          {/* Personal Information Form */}
-          <div className="bg-white rounded-2xl border border-gray-200/80 shadow-sm p-6 sm:p-7 flex flex-col justify-between">
             <div>
-              <div className="flex items-center gap-3 mb-6 pb-4 border-b border-gray-100">
-                <div className="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600 font-semibold">
-                  <UserIcon className="w-5 h-5" />
-                </div>
-                <div>
-                  <h2 className="text-lg font-bold text-gray-900">Thông tin cơ bản</h2>
-                  <p className="text-xs text-gray-500">Cập nhật họ tên và địa chỉ email liên hệ của bạn</p>
-                </div>
+              <div className="banner-title-group">
+                <h1 className="banner-name">{user?.name}</h1>
+                <span className="banner-role-badge">
+                  {roleLabel}
+                </span>
               </div>
-
-              {infoSuccess && (
-                <div className="mb-5 p-3.5 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-xl text-sm flex items-center gap-2">
-                  <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
-                  <span>{infoSuccess}</span>
-                </div>
-              )}
-
-              {infoError && (
-                <div className="mb-5 p-3.5 bg-rose-50 border border-rose-200 text-rose-700 rounded-xl text-sm flex items-center gap-2">
-                  <AlertTriangle className="w-4 h-4 flex-shrink-0" />
-                  <span>{infoError}</span>
-                </div>
-              )}
-
-              <form onSubmit={handleUpdateInfo} className="space-y-4">
-                <div>
-                  <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5">
-                    Họ và tên
-                  </label>
-                  <div className="relative">
-                    <UserIcon className="w-4 h-4 text-gray-400 absolute left-3.5 top-3.5" />
-                    <input
-                      type="text"
-                      required
-                      value={name}
-                      onChange={(e) => setName(e.target.value)}
-                      className="w-full pl-10 pr-4 py-2.5 text-sm bg-gray-50/50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 transition-all font-medium text-gray-900"
-                      placeholder="Nguyễn Văn A"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5">
-                    Địa chỉ Email
-                  </label>
-                  <div className="relative">
-                    <Mail className="w-4 h-4 text-gray-400 absolute left-3.5 top-3.5" />
-                    <input
-                      type="email"
-                      required
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      className="w-full pl-10 pr-4 py-2.5 text-sm bg-gray-50/50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 transition-all font-medium text-gray-900"
-                      placeholder="user@vbe.vn"
-                    />
-                  </div>
-                </div>
-
-                <div className="pt-2 grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
-                      Phòng ban
-                    </label>
-                    <input
-                      type="text"
-                      disabled
-                      value={user?.department_name || 'Ban Quản Trị Chung'}
-                      className="w-full px-4 py-2.5 text-sm bg-gray-100 border border-gray-200 rounded-xl text-gray-600 font-medium cursor-not-allowed"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
-                      Vai trò
-                    </label>
-                    <input
-                      type="text"
-                      disabled
-                      value={roleLabel}
-                      className="w-full px-4 py-2.5 text-sm bg-gray-100 border border-gray-200 rounded-xl text-gray-600 font-medium cursor-not-allowed"
-                    />
-                  </div>
-                </div>
-
-                <div className="pt-4">
-                  <button
-                    type="submit"
-                    disabled={infoLoading}
-                    className="w-full sm:w-auto px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-sm font-semibold rounded-xl shadow-sm transition-all flex items-center justify-center gap-2 cursor-pointer"
-                  >
-                    {infoLoading ? (
-                      <RefreshCw className="w-4 h-4 animate-spin" />
-                    ) : (
-                      <Save className="w-4 h-4" />
-                    )}
-                    Lưu thông tin cá nhân
-                  </button>
-                </div>
-              </form>
+              <div className="banner-subtitle">
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                  <Mail size={14} style={{ opacity: 0.9 }} /> {user?.email}
+                </span>
+                {user?.department_name && (
+                  <>
+                    <span>•</span>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                      <Building size={14} style={{ opacity: 0.9 }} /> {user?.department_name}
+                    </span>
+                  </>
+                )}
+              </div>
             </div>
           </div>
 
-          {/* Change Password Form */}
-          <div className="bg-white rounded-2xl border border-gray-200/80 shadow-sm p-6 sm:p-7 flex flex-col justify-between">
+          <div className="banner-right-badge">
+            <Shield size={20} color="#fef3c7" />
             <div>
-              <div className="flex items-center gap-3 mb-6 pb-4 border-b border-gray-100">
-                <div className="w-10 h-10 rounded-xl bg-amber-50 flex items-center justify-center text-amber-600 font-semibold">
-                  <Lock className="w-5 h-5" />
-                </div>
-                <div>
-                  <h2 className="text-lg font-bold text-gray-900">Đổi mật khẩu</h2>
-                  <p className="text-xs text-gray-500">Bảo vệ tài khoản với mật khẩu tối thiểu 6 ký tự</p>
-                </div>
-              </div>
-
-              {passSuccess && (
-                <div className="mb-5 p-3.5 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-xl text-sm flex items-center gap-2">
-                  <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
-                  <span>{passSuccess}</span>
-                </div>
-              )}
-
-              {passError && (
-                <div className="mb-5 p-3.5 bg-rose-50 border border-rose-200 text-rose-700 rounded-xl text-sm flex items-center gap-2">
-                  <AlertTriangle className="w-4 h-4 flex-shrink-0" />
-                  <span>{passError}</span>
-                </div>
-              )}
-
-              <form onSubmit={handleChangePassword} className="space-y-4">
-                <div>
-                  <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5">
-                    Mật khẩu hiện tại
-                  </label>
-                  <div className="relative">
-                    <Lock className="w-4 h-4 text-gray-400 absolute left-3.5 top-3.5" />
-                    <input
-                      type={showCurrentPass ? 'text' : 'password'}
-                      required
-                      value={currentPassword}
-                      onChange={(e) => setCurrentPassword(e.target.value)}
-                      className="w-full pl-10 pr-10 py-2.5 text-sm bg-gray-50/50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 transition-all text-gray-900"
-                      placeholder="Nhập mật khẩu hiện tại"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowCurrentPass(!showCurrentPass)}
-                      className="absolute right-3.5 top-3 text-gray-400 hover:text-gray-600 cursor-pointer"
-                    >
-                      {showCurrentPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                    </button>
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5">
-                    Mật khẩu mới
-                  </label>
-                  <div className="relative">
-                    <Lock className="w-4 h-4 text-gray-400 absolute left-3.5 top-3.5" />
-                    <input
-                      type={showNewPass ? 'text' : 'password'}
-                      required
-                      value={newPassword}
-                      onChange={(e) => setNewPassword(e.target.value)}
-                      className="w-full pl-10 pr-10 py-2.5 text-sm bg-gray-50/50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 transition-all text-gray-900"
-                      placeholder="Tối thiểu 6 ký tự"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowNewPass(!showNewPass)}
-                      className="absolute right-3.5 top-3 text-gray-400 hover:text-gray-600 cursor-pointer"
-                    >
-                      {showNewPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                    </button>
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5">
-                    Xác nhận mật khẩu mới
-                  </label>
-                  <div className="relative">
-                    <Check className="w-4 h-4 text-gray-400 absolute left-3.5 top-3.5" />
-                    <input
-                      type="password"
-                      required
-                      value={confirmPassword}
-                      onChange={(e) => setConfirmPassword(e.target.value)}
-                      className="w-full pl-10 pr-4 py-2.5 text-sm bg-gray-50/50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 transition-all text-gray-900"
-                      placeholder="Nhập lại mật khẩu mới"
-                    />
-                  </div>
-                </div>
-
-                <div className="pt-4">
-                  <button
-                    type="submit"
-                    disabled={passLoading}
-                    className="w-full sm:w-auto px-6 py-2.5 bg-gray-900 hover:bg-black disabled:opacity-50 text-white text-sm font-semibold rounded-xl shadow-sm transition-all flex items-center justify-center gap-2 cursor-pointer"
-                  >
-                    {passLoading ? (
-                      <RefreshCw className="w-4 h-4 animate-spin" />
-                    ) : (
-                      <Lock className="w-4 h-4" />
-                    )}
-                    Cập nhật mật khẩu
-                  </button>
-                </div>
-              </form>
+              <div style={{ fontSize: 10, color: '#fef3c7', fontWeight: 600, textTransform: 'uppercase' }}>Trạng thái tài khoản</div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: '#ffffff' }}>Nhân sự chính thức</div>
             </div>
           </div>
         </div>
-      )}
 
-      {/* Tab 2: Attendance History */}
-      {activeTab === 'attendance' && (
-        <div className="space-y-6">
-          {/* Summary Metric Cards */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-            <div className="bg-white p-5 rounded-2xl border border-gray-200/80 shadow-sm">
-              <div className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Tổng lượt chấm</div>
-              <div className="text-2xl font-black text-gray-900 mt-2">{totalDays}</div>
-              <div className="text-xs text-gray-400 mt-1">Lượt ghi nhận</div>
-            </div>
+        {/* Navigation Tabs */}
+        <div className="profile-nav-tabs">
+          <button
+            onClick={() => setActiveTab('info')}
+            className={`profile-nav-tab ${activeTab === 'info' ? 'active' : ''}`}
+          >
+            <UserIcon size={16} />
+            Thông tin cá nhân & Đổi mật khẩu
+          </button>
 
-            <div className="bg-white p-5 rounded-2xl border border-gray-200/80 shadow-sm">
-              <div className="text-xs font-semibold text-emerald-600 uppercase tracking-wider">Đúng giờ</div>
-              <div className="text-2xl font-black text-emerald-600 mt-2">{onTimeDays}</div>
-              <div className="text-xs text-gray-400 mt-1">
-                {totalDays > 0 ? Math.round((onTimeDays / totalDays) * 100) : 0}% tỷ lệ
-              </div>
-            </div>
+          <button
+            onClick={() => setActiveTab('attendance')}
+            className={`profile-nav-tab ${activeTab === 'attendance' ? 'active' : ''}`}
+          >
+            <Clock size={16} />
+            Lịch sử chấm công
+          </button>
 
-            <div className="bg-white p-5 rounded-2xl border border-gray-200/80 shadow-sm">
-              <div className="text-xs font-semibold text-amber-600 uppercase tracking-wider">Đi muộn</div>
-              <div className="text-2xl font-black text-amber-600 mt-2">{lateDays}</div>
-              <div className="text-xs text-gray-400 mt-1">Sau 08:30 sáng</div>
-            </div>
-
-            <div className="bg-white p-5 rounded-2xl border border-gray-200/80 shadow-sm">
-              <div className="text-xs font-semibold text-blue-600 uppercase tracking-wider">Làm từ xa (Remote)</div>
-              <div className="text-2xl font-black text-blue-600 mt-2">{remoteDays}</div>
-              <div className="text-xs text-gray-400 mt-1">Ngoài văn phòng (&gt;200m)</div>
-            </div>
-          </div>
-
-          {/* Logs Table */}
-          <div className="bg-white rounded-2xl border border-gray-200/80 shadow-sm overflow-hidden">
-            <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
-              <h3 className="font-bold text-gray-900 text-base">Lịch sử chấm công chi tiết</h3>
-              <button
-                onClick={fetchAttendance}
-                className="text-xs font-semibold text-indigo-600 hover:text-indigo-800 flex items-center gap-1 cursor-pointer"
-              >
-                <RefreshCw className={`w-3.5 h-3.5 ${loadingAttendance ? 'animate-spin' : ''}`} />
-                Làm mới
-              </button>
-            </div>
-
-            {loadingAttendance ? (
-              <div className="p-12 text-center text-gray-400 text-sm">Đang tải lịch sử chấm công...</div>
-            ) : attendanceLogs.length === 0 ? (
-              <div className="p-12 text-center text-gray-400 text-sm">Chưa có dữ liệu chấm công nào được ghi nhận.</div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-sm">
-                  <thead className="bg-gray-50/75 border-b border-gray-100 text-xs font-bold text-gray-500 uppercase tracking-wider">
-                    <tr>
-                      <th className="px-6 py-3.5">Ngày</th>
-                      <th className="px-6 py-3.5">Giờ vào</th>
-                      <th className="px-6 py-3.5">Giờ ra</th>
-                      <th className="px-6 py-3.5">Trạng thái</th>
-                      <th className="px-6 py-3.5">Địa điểm</th>
-                      <th className="px-6 py-3.5">Ghi chú / Lý do</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-100 text-gray-700">
-                    {attendanceLogs.map((log) => {
-                      const checkInDate = new Date(log.check_in_time);
-                      const formattedDate = checkInDate.toLocaleDateString('vi-VN', {
-                        weekday: 'short',
-                        year: 'numeric',
-                        month: '2-digit',
-                        day: '2-digit'
-                      });
-                      const formattedCheckIn = checkInDate.toLocaleTimeString('vi-VN', {
-                        hour: '2-digit',
-                        minute: '2-digit'
-                      });
-                      const formattedCheckOut = log.check_out_time
-                        ? new Date(log.check_out_time).toLocaleTimeString('vi-VN', {
-                            hour: '2-digit',
-                            minute: '2-digit'
-                          })
-                        : '—';
-
-                      const isRemote = log.location_type === 'remote';
-
-                      return (
-                        <tr key={log.id} className="hover:bg-gray-50/50 transition-colors">
-                          <td className="px-6 py-4 font-medium text-gray-900">{formattedDate}</td>
-                          <td className="px-6 py-4 font-semibold text-emerald-600">{formattedCheckIn}</td>
-                          <td className="px-6 py-4 text-gray-500">{formattedCheckOut}</td>
-                          <td className="px-6 py-4">
-                            <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ${
-                              log.status === 'on_time'
-                                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                                : 'bg-amber-50 text-amber-700 border border-amber-200'
-                            }`}>
-                              {log.status === 'on_time' ? 'Đúng giờ' : 'Đi muộn'}
-                            </span>
-                          </td>
-                          <td className="px-6 py-4">
-                            <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold ${
-                              isRemote 
-                                ? 'bg-blue-50 text-blue-700 border border-blue-200' 
-                                : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                            }`}>
-                              <MapPin className="w-3 h-3" />
-                              {isRemote ? 'Ngoài VP (Từ xa)' : 'Tại văn phòng'}
-                              {log.distance_meters !== undefined && log.distance_meters > 0 && (
-                                <span className="opacity-75 font-normal">({log.distance_meters}m)</span>
-                              )}
-                            </span>
-                          </td>
-                          <td className="px-6 py-4 text-xs text-gray-500 max-w-xs truncate">
-                            {log.note || '—'}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
+          <button
+            onClick={() => setActiveTab('reports')}
+            className={`profile-nav-tab ${activeTab === 'reports' ? 'active' : ''}`}
+          >
+            <FileText size={16} />
+            Báo cáo công việc đã gửi
+          </button>
         </div>
-      )}
 
-      {/* Tab 3: Reports History */}
-      {activeTab === 'reports' && (
-        <div className="space-y-6">
-          <div className="bg-white rounded-2xl border border-gray-200/80 shadow-sm p-6">
-            <div className="flex items-center justify-between mb-6 pb-4 border-b border-gray-100">
+        {/* Tab 1: Info & Password */}
+        {activeTab === 'info' && (
+          <div className="forms-grid">
+            {/* Personal Information Card */}
+            <div className="profile-card">
               <div>
-                <h3 className="font-bold text-gray-900 text-base">Báo cáo công việc đã gửi</h3>
-                <p className="text-xs text-gray-500">Danh sách các báo cáo ngày bạn đã nộp lên hệ thống</p>
+                <div className="card-header">
+                  <div className="card-icon-box">
+                    <UserIcon size={20} />
+                  </div>
+                  <div>
+                    <h2 className="card-header-title">Thông tin cơ bản</h2>
+                    <p className="card-header-desc">Cập nhật họ tên và địa chỉ email liên hệ của bạn</p>
+                  </div>
+                </div>
+
+                {infoSuccess && (
+                  <div className="alert-box success">
+                    <CheckCircle2 size={16} />
+                    <span>{infoSuccess}</span>
+                  </div>
+                )}
+
+                {infoError && (
+                  <div className="alert-box error">
+                    <AlertTriangle size={16} />
+                    <span>{infoError}</span>
+                  </div>
+                )}
+
+                <form onSubmit={handleUpdateInfo}>
+                  <div className="form-group">
+                    <label className="form-label">Họ và tên</label>
+                    <div className="input-wrapper">
+                      <UserIcon size={16} className="input-icon-left" />
+                      <input
+                        type="text"
+                        required
+                        value={name}
+                        onChange={(e) => setName(e.target.value)}
+                        className="profile-input"
+                        placeholder="Nguyễn Văn A"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="form-group">
+                    <label className="form-label">Địa chỉ Email</label>
+                    <div className="input-wrapper">
+                      <Mail size={16} className="input-icon-left" />
+                      <input
+                        type="email"
+                        required
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        className="profile-input"
+                        placeholder="user@vbe.vn"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="two-cols-row form-group">
+                    <div>
+                      <label className="form-label">Phòng ban</label>
+                      <input
+                        type="text"
+                        disabled
+                        value={user?.department_name || 'Ban Quản Trị Chung'}
+                        className="profile-input"
+                        style={{ paddingLeft: 14 }}
+                      />
+                    </div>
+
+                    <div>
+                      <label className="form-label">Vai trò</label>
+                      <input
+                        type="text"
+                        disabled
+                        value={roleLabel}
+                        className="profile-input"
+                        style={{ paddingLeft: 14 }}
+                      />
+                    </div>
+                  </div>
+
+                  <div style={{ marginTop: 24 }}>
+                    <button
+                      type="submit"
+                      disabled={infoLoading}
+                      className="btn-warm-gold"
+                    >
+                      {infoLoading ? <RefreshCw size={16} className="animate-spin" /> : <Save size={16} />}
+                      Lưu thông tin cá nhân
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+
+            {/* Change Password Card */}
+            <div className="profile-card">
+              <div>
+                <div className="card-header">
+                  <div className="card-icon-box">
+                    <Lock size={20} />
+                  </div>
+                  <div>
+                    <h2 className="card-header-title">Đổi mật khẩu</h2>
+                    <p className="card-header-desc">Bảo vệ tài khoản với mật khẩu tối thiểu 6 ký tự</p>
+                  </div>
+                </div>
+
+                {passSuccess && (
+                  <div className="alert-box success">
+                    <CheckCircle2 size={16} />
+                    <span>{passSuccess}</span>
+                  </div>
+                )}
+
+                {passError && (
+                  <div className="alert-box error">
+                    <AlertTriangle size={16} />
+                    <span>{passError}</span>
+                  </div>
+                )}
+
+                <form onSubmit={handleChangePassword}>
+                  <div className="form-group">
+                    <label className="form-label">Mật khẩu hiện tại</label>
+                    <div className="input-wrapper">
+                      <Lock size={16} className="input-icon-left" />
+                      <input
+                        type={showCurrentPass ? 'text' : 'password'}
+                        required
+                        value={currentPassword}
+                        onChange={(e) => setCurrentPassword(e.target.value)}
+                        className="profile-input"
+                        placeholder="Nhập mật khẩu hiện tại"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowCurrentPass(!showCurrentPass)}
+                        className="input-btn-toggle"
+                        title={showCurrentPass ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}
+                      >
+                        {showCurrentPass ? <EyeOff size={16} /> : <Eye size={16} />}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="form-group">
+                    <label className="form-label">Mật khẩu mới</label>
+                    <div className="input-wrapper">
+                      <Lock size={16} className="input-icon-left" />
+                      <input
+                        type={showNewPass ? 'text' : 'password'}
+                        required
+                        value={newPassword}
+                        onChange={(e) => setNewPassword(e.target.value)}
+                        className="profile-input"
+                        placeholder="Tối thiểu 6 ký tự"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowNewPass(!showNewPass)}
+                        className="input-btn-toggle"
+                        title={showNewPass ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}
+                      >
+                        {showNewPass ? <EyeOff size={16} /> : <Eye size={16} />}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="form-group">
+                    <label className="form-label">Xác nhận mật khẩu mới</label>
+                    <div className="input-wrapper">
+                      <Check size={16} className="input-icon-left" />
+                      <input
+                        type="password"
+                        required
+                        value={confirmPassword}
+                        onChange={(e) => setConfirmPassword(e.target.value)}
+                        className="profile-input"
+                        placeholder="Nhập lại mật khẩu mới"
+                      />
+                    </div>
+                  </div>
+
+                  <div style={{ marginTop: 24 }}>
+                    <button
+                      type="submit"
+                      disabled={passLoading}
+                      className="btn-dark-slate"
+                    >
+                      {passLoading ? <RefreshCw size={16} className="animate-spin" /> : <Lock size={16} />}
+                      Cập nhật mật khẩu
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Tab 2: Attendance History */}
+        {activeTab === 'attendance' && (
+          <div>
+            {/* Metric Cards */}
+            <div className="metrics-grid-4">
+              <div className="stat-metric-card">
+                <div className="stat-metric-label">Tổng lượt chấm</div>
+                <div className="stat-metric-val">{totalDays}</div>
+                <div className="stat-metric-sub">Lượt ghi nhận trên hệ thống</div>
+              </div>
+
+              <div className="stat-metric-card">
+                <div className="stat-metric-label">Đúng giờ</div>
+                <div className="stat-metric-val green">{onTimeDays}</div>
+                <div className="stat-metric-sub">
+                  {totalDays > 0 ? Math.round((onTimeDays / totalDays) * 100) : 0}% tỷ lệ đúng giờ
+                </div>
+              </div>
+
+              <div className="stat-metric-card">
+                <div className="stat-metric-label">Đi muộn</div>
+                <div className="stat-metric-val amber">{lateDays}</div>
+                <div className="stat-metric-sub">Sau 09:30 sáng</div>
+              </div>
+
+              <div className="stat-metric-card">
+                <div className="stat-metric-label">Làm ngoài VP (Remote)</div>
+                <div className="stat-metric-val warm">{remoteDays}</div>
+                <div className="stat-metric-sub">Cách trụ sở &gt; 200m</div>
+              </div>
+            </div>
+
+            {/* Detailed Table */}
+            <div className="profile-table-card">
+              <div className="table-top-bar">
+                <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' }}>Lịch sử chấm công chi tiết</h3>
+                <button
+                  onClick={fetchAttendance}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: '#d97706',
+                    fontSize: 12,
+                    fontWeight: 600,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    cursor: 'pointer'
+                  }}
+                >
+                  <RefreshCw size={14} className={loadingAttendance ? 'animate-spin' : ''} />
+                  Làm mới
+                </button>
+              </div>
+
+              {loadingAttendance ? (
+                <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)', fontSize: 13 }}>
+                  Đang tải lịch sử chấm công...
+                </div>
+              ) : attendanceLogs.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-secondary)', fontSize: 13 }}>
+                  Chưa có dữ liệu chấm công nào được ghi nhận.
+                </div>
+              ) : (
+                <div className="table-responsive">
+                  <table className="custom-table">
+                    <thead>
+                      <tr>
+                        <th>Ngày</th>
+                        <th>Giờ vào</th>
+                        <th>Giờ ra</th>
+                        <th>Trạng thái</th>
+                        <th>Địa điểm</th>
+                        <th>Ghi chú / Lý do</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {attendanceLogs.map((log) => {
+                        const checkInDate = new Date(log.check_in_time);
+                        const formattedDate = checkInDate.toLocaleDateString('vi-VN', {
+                          weekday: 'short',
+                          year: 'numeric',
+                          month: '2-digit',
+                          day: '2-digit'
+                        });
+                        const formattedCheckIn = checkInDate.toLocaleTimeString('vi-VN', {
+                          hour: '2-digit',
+                          minute: '2-digit'
+                        });
+                        const formattedCheckOut = log.check_out_time
+                          ? new Date(log.check_out_time).toLocaleTimeString('vi-VN', {
+                              hour: '2-digit',
+                              minute: '2-digit'
+                            })
+                          : '—';
+
+                        const isRemote = log.location_type === 'remote';
+
+                        return (
+                          <tr key={log.id}>
+                            <td style={{ fontWeight: 600 }}>{formattedDate}</td>
+                            <td style={{ fontWeight: 700, color: '#059669' }}>{formattedCheckIn}</td>
+                            <td style={{ color: 'var(--text-secondary)' }}>{formattedCheckOut}</td>
+                            <td>
+                              <span className={`badge-status ${log.status === 'on_time' ? 'on-time' : 'late'}`}>
+                                {log.status === 'on_time' ? 'Đúng giờ' : 'Đi muộn'}
+                              </span>
+                            </td>
+                            <td>
+                              <span className={`badge-status ${isRemote ? 'remote' : 'office'}`}>
+                                <MapPin size={12} style={{ marginRight: 4 }} />
+                                {isRemote ? 'Ngoài VP (Từ xa)' : 'Tại văn phòng'}
+                                {log.distance_meters !== undefined && log.distance_meters > 0 && (
+                                  <span style={{ opacity: 0.8, marginLeft: 4 }}>({log.distance_meters}m)</span>
+                                )}
+                              </span>
+                            </td>
+                            <td style={{ fontSize: 12, color: 'var(--text-secondary)', maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {log.note || '—'}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Tab 3: Reports History */}
+        {activeTab === 'reports' && (
+          <div className="profile-table-card" style={{ padding: 24 }}>
+            <div className="table-top-bar" style={{ padding: '0 0 16px 0' }}>
+              <div>
+                <h3 style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)' }}>Báo cáo công việc đã gửi</h3>
+                <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2 }}>
+                  Danh sách các báo cáo ngày cá nhân bạn đã nộp lên hệ thống
+                </p>
               </div>
               <button
                 onClick={fetchReports}
-                className="text-xs font-semibold text-indigo-600 hover:text-indigo-800 flex items-center gap-1 cursor-pointer"
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: '#d97706',
+                  fontSize: 12,
+                  fontWeight: 600,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  cursor: 'pointer'
+                }}
               >
-                <RefreshCw className={`w-3.5 h-3.5 ${loadingReports ? 'animate-spin' : ''}`} />
+                <RefreshCw size={14} className={loadingReports ? 'animate-spin' : ''} />
                 Làm mới
               </button>
             </div>
 
             {loadingReports ? (
-              <div className="p-12 text-center text-gray-400 text-sm">Đang tải danh sách báo cáo...</div>
+              <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)', fontSize: 13 }}>
+                Đang tải danh sách báo cáo...
+              </div>
             ) : reports.length === 0 ? (
-              <div className="p-12 text-center text-gray-400 text-sm">Bạn chưa nộp báo cáo công việc nào.</div>
+              <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-secondary)', fontSize: 13 }}>
+                Bạn chưa nộp báo cáo công việc nào.
+              </div>
             ) : (
-              <div className="space-y-4">
+              <div style={{ marginTop: 16 }}>
                 {reports.map((r) => (
-                  <div key={r.id} className="p-5 rounded-xl border border-gray-100 bg-gray-50/50 hover:bg-white hover:border-gray-200 hover:shadow-sm transition-all">
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 mb-3 border-b border-gray-200/60">
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold text-xs">
-                          <Calendar className="w-4 h-4" />
+                  <div key={r.id} className="report-item-card">
+                    <div className="report-card-top">
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <div style={{ width: 32, height: 32, borderRadius: 8, background: '#fef3c7', color: '#d97706', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          <Calendar size={16} />
                         </div>
-                        <span className="font-bold text-gray-900 text-sm">
+                        <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>
                           Báo cáo ngày: {new Date(r.report_date).toLocaleDateString('vi-VN', {
                             weekday: 'long',
                             year: 'numeric',
@@ -654,62 +1198,51 @@ export const UserProfile: React.FC = () => {
                           })}
                         </span>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${
-                          r.status === 'reviewed' 
-                            ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' 
-                            : 'bg-amber-50 text-amber-700 border border-amber-200'
-                        }`}>
+
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <span className={`badge-status ${r.status === 'reviewed' ? 'on-time' : 'late'}`}>
                           {r.status === 'reviewed' ? 'Đã duyệt' : 'Chờ duyệt'}
                         </span>
-                        <span className="text-xs text-gray-400">
+                        <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
                           Gửi lúc: {new Date(r.created_at).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
                         </span>
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
-                      <div>
-                        <div className="font-semibold text-emerald-700 mb-1 flex items-center gap-1">
-                          <CheckCircle2 className="w-3.5 h-3.5" /> Việc đã hoàn thành:
+                    <div className="report-details-grid">
+                      <div className="report-field-box">
+                        <div className="report-field-label" style={{ color: '#059669' }}>
+                          <CheckCircle2 size={14} /> Việc đã hoàn thành:
                         </div>
-                        <p className="text-gray-700 bg-white p-3 rounded-lg border border-gray-100 whitespace-pre-line leading-relaxed">
-                          {r.tasks_completed || '—'}
-                        </p>
+                        <div className="report-field-content">{r.tasks_completed || '—'}</div>
                       </div>
 
-                      <div>
-                        <div className="font-semibold text-blue-700 mb-1 flex items-center gap-1">
-                          <Clock className="w-3.5 h-3.5" /> Đang triển khai:
+                      <div className="report-field-box">
+                        <div className="report-field-label" style={{ color: '#b45309' }}>
+                          <Clock size={14} /> Đang triển khai:
                         </div>
-                        <p className="text-gray-700 bg-white p-3 rounded-lg border border-gray-100 whitespace-pre-line leading-relaxed">
-                          {r.tasks_in_progress || '—'}
-                        </p>
+                        <div className="report-field-content">{r.tasks_in_progress || '—'}</div>
                       </div>
 
-                      <div>
-                        <div className="font-semibold text-indigo-700 mb-1 flex items-center gap-1">
-                          <Calendar className="w-3.5 h-3.5" /> Kế hoạch ngày mai:
+                      <div className="report-field-box">
+                        <div className="report-field-label" style={{ color: '#d97706' }}>
+                          <Calendar size={14} /> Kế hoạch ngày mai:
                         </div>
-                        <p className="text-gray-700 bg-white p-3 rounded-lg border border-gray-100 whitespace-pre-line leading-relaxed">
-                          {r.plans_for_tomorrow || '—'}
-                        </p>
+                        <div className="report-field-content">{r.plans_for_tomorrow || '—'}</div>
                       </div>
 
-                      <div>
-                        <div className="font-semibold text-amber-700 mb-1 flex items-center gap-1">
-                          <AlertTriangle className="w-3.5 h-3.5" /> Khó khăn / Đề xuất:
+                      <div className="report-field-box">
+                        <div className="report-field-label" style={{ color: '#dc2626' }}>
+                          <AlertTriangle size={14} /> Khó khăn / Đề xuất:
                         </div>
-                        <p className="text-gray-700 bg-white p-3 rounded-lg border border-gray-100 whitespace-pre-line leading-relaxed">
-                          {r.issues_or_blockers || 'Không có khó khăn'}
-                        </p>
+                        <div className="report-field-content">{r.issues_or_blockers || 'Không có khó khăn'}</div>
                       </div>
                     </div>
 
                     {r.feedback && (
-                      <div className="mt-3 p-3 bg-indigo-50/80 border border-indigo-100 rounded-lg text-xs">
-                        <div className="font-bold text-indigo-900 mb-0.5">Nhận xét từ Quản lý:</div>
-                        <div className="text-indigo-800">{r.feedback}</div>
+                      <div style={{ marginTop: 12, padding: '10px 14px', background: '#fef3c7', border: '1px solid #fde68a', borderRadius: 8, fontSize: 12 }}>
+                        <div style={{ fontWeight: 700, color: '#92400e', marginBottom: 2 }}>Nhận xét từ Quản lý:</div>
+                        <div style={{ color: '#78350f' }}>{r.feedback}</div>
                       </div>
                     )}
                   </div>
@@ -717,8 +1250,8 @@ export const UserProfile: React.FC = () => {
               </div>
             )}
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 };

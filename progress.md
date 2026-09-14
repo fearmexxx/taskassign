@@ -144,9 +144,10 @@ This log tracks the build history, feature additions, styling changes, and deplo
 - **Lịch sử Báo cáo Công việc (Daily Work Reports)**:
   - Xem danh sách toàn bộ báo cáo ngày do chính mình nộp lên hệ thống.
   - Phân loại rõ ràng 4 mục: Việc đã hoàn thành, Việc đang làm, Kế hoạch ngày mai, Khó khăn/đề xuất, kèm trạng thái duyệt và nhận xét từ Quản lý.
-- **Tích hợp Điều hướng Đa nền tảng**:
-  - Nhấp vào Profile Card hoặc menu "Hồ sơ cá nhân" trên Sidebar Desktop để mở nhanh.
-  - Nhấp vào User Card trên Mobile Top Bar để mở nhanh trên điện thoại di động.
+- **Thiết Kế Tinh Tế & Bộ Nhận Diện Sang Trọng (Warm Gold & Amber)**:
+  - Khắc phục hoàn toàn lỗi bể layout (do trước đó sử dụng class Tailwind trong khi dự án dùng thuần CSS styled-jsx với biến CSS chuẩn Asana).
+  - Chuyển đổi toàn bộ dải màu xanh dương (AI Slop vibe) sang **tone màu Vàng Hổ Phách & Vàng Kim (Warm Amber & Gold - `#d97706`, `#b45309`, `#fef3c7`)** mang lại cảm giác chuyên nghiệp, sang trọng và chuẩn ERP cao cấp.
+  - Tích hợp điều hướng đồng bộ trên cả Desktop Sidebar (`.active-profile`) và Mobile Top Bar.
 
 ---
 
