@@ -88,6 +88,29 @@ const dbRun = (sql, params = []) => new Promise((resolve, reject) => {
   });
 });
 
+// --- NOTIFICATION HELPER ---
+
+/**
+ * Tạo thông báo in-app cho một user
+ * @param {number} userId  - ID của người nhận
+ * @param {string} type    - 'task_assigned' | 'project_added' | 'task_updated'
+ * @param {string} title   - Tiêu đề ngắn
+ * @param {string} message - Nội dung chi tiết
+ * @param {number|null} referenceId   - ID task hoặc project liên quan
+ * @param {string|null} referenceType - 'task' | 'project'
+ */
+const createNotification = async (userId, type, title, message, referenceId = null, referenceType = null) => {
+  try {
+    await dbRun(
+      `INSERT INTO notifications (user_id, type, title, message, is_read, reference_id, reference_type, created_at)
+       VALUES (?, ?, ?, ?, 0, ?, ?, datetime('now','localtime'))`,
+      [userId, type, title, message, referenceId, referenceType]
+    );
+  } catch (err) {
+    console.error(`[Notification] Failed to create notification for user ${userId}:`, err.message);
+  }
+};
+
 // --- AUTHENTICATION ROUTES ---
 
 // Login Endpoint
@@ -474,6 +497,21 @@ app.post('/api/projects', authenticateToken, async (req, res) => {
       }
     }
 
+    // --- Fire notifications for project creation ---
+    const pCreatorName = req.user.name || 'Ai đó';
+    for (const uid of memberSet) {
+      if (uid && uid !== req.user.id) {
+        createNotification(
+          uid,
+          'project_added',
+          `Bạn được thêm vào dự án mới`,
+          `${pCreatorName} đã thêm bạn vào dự án "${trimmedName}".`,
+          projectId,
+          'project'
+        );
+      }
+    }
+
     res.status(201).json({ 
       id: projectId, 
       name: trimmedName, 
@@ -524,9 +562,29 @@ app.put('/api/projects/:id', authenticateToken, async (req, res) => {
 
     // Update members
     if (Array.isArray(members)) {
+      // Capture old member IDs before deleting
+      const oldProjMembers = await dbAll(`SELECT user_id FROM project_members WHERE project_id = ?`, [projectId]);
+      const oldMemberSet = new Set(oldProjMembers.map(r => r.user_id));
+
       await dbRun(`DELETE FROM project_members WHERE project_id = ?`, [projectId]);
       for (let userId of members) {
         await dbRun(`INSERT INTO project_members (project_id, user_id) VALUES (?, ?)`, [projectId, userId]);
+      }
+
+      // Notify newly added members
+      const pUpdaterName = req.user.name || 'Ai đó';
+      const pName = name.trim();
+      for (const userId of members) {
+        if (!oldMemberSet.has(Number(userId)) && Number(userId) !== req.user.id) {
+          createNotification(
+            Number(userId),
+            'project_added',
+            `Bạn được thêm vào dự án`,
+            `${pUpdaterName} đã thêm bạn vào dự án "${pName}".`,
+            Number(projectId),
+            'project'
+          );
+        }
       }
     }
 
@@ -813,6 +871,32 @@ app.post('/api/tasks', authenticateToken, async (req, res) => {
       [taskId]
     );
 
+    // --- Fire notifications (async, không block response) ---
+    const creatorId = req.user.id;
+    const creatorName = req.user.name || 'Ai đó';
+    const projectName = task.project_name || 'dự án';
+    const notifyUserIds = new Set();
+
+    // Notify PIC/owner nếu khác người tạo
+    if (defaultOwnerId && Number(defaultOwnerId) !== creatorId) {
+      notifyUserIds.add(Number(defaultOwnerId));
+    }
+    // Notify tất cả members được gán (trừ người tạo)
+    for (const m of task.members || []) {
+      if (m.user_id !== creatorId) notifyUserIds.add(m.user_id);
+    }
+
+    for (const uid of notifyUserIds) {
+      createNotification(
+        uid,
+        'task_assigned',
+        `Bạn được giao công việc mới`,
+        `${creatorName} đã giao cho bạn task "${task.title}" trong ${projectName}.`,
+        taskId,
+        'task'
+      );
+    }
+
     res.status(201).json(task);
   } catch (err) {
     console.error("Create task error:", err);
@@ -910,6 +994,43 @@ app.put('/api/tasks/:id', authenticateToken, async (req, res) => {
        WHERE td.task_id = ?`,
       [taskId]
     );
+
+    // --- Fire notifications for task update ---
+    const updaterName = req.user.name || 'Ai đó';
+    const taskTitle = task.title || 'công việc';
+    const projName = task.project_name || 'dự án';
+
+    // Notify new owner nếu owner_id thay đổi và khác người cập nhật
+    if (owner_id && Number(owner_id) !== Number(currentTask.owner_id) && Number(owner_id) !== req.user.id) {
+      createNotification(
+        Number(owner_id),
+        'task_assigned',
+        `Bạn được giao làm PIC công việc`,
+        `${updaterName} đã chỉ định bạn làm người phụ trách "${taskTitle}" trong ${projName}.`,
+        Number(taskId),
+        'task'
+      );
+    }
+
+    // Notify members mới được thêm vào (nếu members được update)
+    if (Array.isArray(members)) {
+      const oldMemberIds = new Set(
+        (await dbAll(`SELECT user_id FROM task_members WHERE task_id = ?`, [taskId])).map(r => r.user_id)
+      );
+      // So sánh với members vừa được update (đã INSERT ở trên, đọc lại từ task.members)
+      for (const m of task.members || []) {
+        if (!oldMemberIds.has(m.user_id) && m.user_id !== req.user.id) {
+          createNotification(
+            m.user_id,
+            'task_assigned',
+            `Bạn được thêm vào công việc`,
+            `${updaterName} đã thêm bạn vào task "${taskTitle}" trong ${projName}.`,
+            Number(taskId),
+            'task'
+          );
+        }
+      }
+    }
 
     res.json(task);
   } catch (err) {
@@ -1530,6 +1651,63 @@ app.post('/api/reports', authenticateToken, (req, res) => {
       res.status(201).json({ id: this.lastID, user_id: req.user.id, content, date: today, status: 'Submitted' });
     }
   );
+});
+
+// --- NOTIFICATIONS API ---
+
+// GET /api/notifications - Lấy danh sách thông báo của user hiện tại (max 50)
+app.get('/api/notifications', authenticateToken, async (req, res) => {
+  try {
+    const notifications = await dbAll(
+      `SELECT * FROM notifications 
+       WHERE user_id = ? 
+       ORDER BY created_at DESC 
+       LIMIT 50`,
+      [req.user.id]
+    );
+    res.json(notifications);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/notifications/unread-count - Số lượng thông báo chưa đọc
+app.get('/api/notifications/unread-count', authenticateToken, async (req, res) => {
+  try {
+    const row = await dbGet(
+      `SELECT COUNT(*) as count FROM notifications WHERE user_id = ? AND is_read = 0`,
+      [req.user.id]
+    );
+    res.json({ count: row ? (row.count || 0) : 0 });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PUT /api/notifications/:id/read - Đánh dấu 1 thông báo đã đọc
+app.put('/api/notifications/:id/read', authenticateToken, async (req, res) => {
+  try {
+    await dbRun(
+      `UPDATE notifications SET is_read = 1 WHERE id = ? AND user_id = ?`,
+      [req.params.id, req.user.id]
+    );
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PUT /api/notifications/read-all - Đánh dấu tất cả thông báo đã đọc
+app.put('/api/notifications/read-all', authenticateToken, async (req, res) => {
+  try {
+    await dbRun(
+      `UPDATE notifications SET is_read = 1 WHERE user_id = ?`,
+      [req.user.id]
+    );
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // Global Error Handler Middleware

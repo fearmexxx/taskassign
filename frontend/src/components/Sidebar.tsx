@@ -1,5 +1,6 @@
 import React from 'react';
 import { useAuth } from '../context/AuthContext';
+import { NotificationBell } from './NotificationBell';
 import { 
   LayoutDashboard, 
   FolderGit2, 
@@ -205,10 +206,11 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, isChe
       <div>
         <div className="sidebar-brand">
           <div className="brand-icon" style={{ fontSize: 13, letterSpacing: -0.5, fontWeight: 900 }}>VBE</div>
-          <div>
+          <div style={{ flex: 1 }}>
             <span className="brand-text">VBE Agency</span>
             <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 500 }}>Chấm công & ERP</div>
           </div>
+          <NotificationBell onNavigate={setActiveTab} />
         </div>
 
         <div 
