@@ -210,7 +210,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, isChe
             <span className="brand-text">VBE Agency</span>
             <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 500 }}>Chấm công & ERP</div>
           </div>
-          <NotificationBell onNavigate={setActiveTab} />
+          <NotificationBell onNavigate={setActiveTab} placement="right" />
         </div>
 
         <div 

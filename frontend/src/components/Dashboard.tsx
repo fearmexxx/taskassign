@@ -16,6 +16,7 @@ import {
   X,
   Smartphone
 } from 'lucide-react';
+import { NotificationBell } from './NotificationBell';
 
 interface DashboardProps {
   onCheckInChange: (checkedIn: boolean) => void;
@@ -805,6 +806,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ onCheckInChange, setActive
             {currentTime || `Hôm nay là ${new Date().toLocaleDateString('vi-VN', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}`}
             {' • '}Ca chuẩn: <strong>09:30 - 18:30 (9.0h)</strong>
           </p>
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <NotificationBell onNavigate={setActiveTab} placement="right" />
         </div>
       </div>
 

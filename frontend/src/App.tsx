@@ -9,6 +9,7 @@ import { DepartmentManager } from './components/DepartmentManager';
 import { WorkReports } from './components/WorkReports';
 import { SalaryManager } from './components/SalaryManager';
 import { UserProfile } from './components/UserProfile';
+import { NotificationBell } from './components/NotificationBell';
 
 import { 
   LayoutDashboard, 
@@ -107,6 +108,7 @@ const AppContent: React.FC = () => {
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <NotificationBell onNavigate={setActiveTab} placement="right" />
           <span style={{
             fontSize: 10,
             fontWeight: 600,

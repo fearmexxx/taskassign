@@ -103,7 +103,7 @@ const createNotification = async (userId, type, title, message, referenceId = nu
   try {
     await dbRun(
       `INSERT INTO notifications (user_id, type, title, message, is_read, reference_id, reference_type, created_at)
-       VALUES (?, ?, ?, ?, 0, ?, ?, datetime('now','localtime'))`,
+       VALUES (?, ?, ?, ?, 0, ?, ?, CURRENT_TIMESTAMP)`,
       [userId, type, title, message, referenceId, referenceType]
     );
   } catch (err) {

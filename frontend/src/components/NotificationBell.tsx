@@ -16,11 +16,12 @@ interface Notification {
 
 interface NotificationBellProps {
   onNavigate?: (tab: string) => void;
+  placement?: 'left' | 'right' | 'center';
 }
 
 const POLL_INTERVAL_MS = 30_000;
 
-export const NotificationBell: React.FC<NotificationBellProps> = ({ onNavigate }) => {
+export const NotificationBell: React.FC<NotificationBellProps> = ({ onNavigate, placement = 'center' }) => {
   const { fetchWithAuth } = useAuth();
   const [unreadCount, setUnreadCount] = useState(0);
   const [notifications, setNotifications] = useState<Notification[]>([]);
@@ -178,9 +179,8 @@ export const NotificationBell: React.FC<NotificationBellProps> = ({ onNavigate }
         <div style={{
           position: 'absolute',
           top: 'calc(100% + 8px)',
-          left: '50%',
-          transform: 'translateX(-50%)',
-          width: 340,
+          ...(placement === 'right' ? { right: 0 } : placement === 'left' ? { left: 0 } : { left: '50%', transform: 'translateX(-50%)' }),
+          width: 'min(340px, calc(100vw - 32px))',
           maxHeight: 440,
           background: '#0f172a',
           border: '1px solid rgba(0, 242, 254, 0.15)',
