@@ -959,6 +959,22 @@ export const ProjectView: React.FC = () => {
             flex-direction: column !important;
             gap: 6px !important;
           }
+          .proj-role-item {
+            word-break: break-word !important;
+            line-height: 1.4 !important;
+          }
+          .proj-action-btns {
+            display: grid !important;
+            grid-template-columns: 1fr 1fr !important;
+            gap: 8px !important;
+            width: 100% !important;
+          }
+          .proj-action-btns button {
+            justify-content: center !important;
+            padding: 8px 10px !important;
+            font-size: 13px !important;
+            width: 100% !important;
+          }
           .board-grid {
             display: flex !important;
             overflow-x: auto !important;
@@ -1076,7 +1092,7 @@ export const ProjectView: React.FC = () => {
                 )}
               </div>
 
-              <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+              <div className="proj-action-btns" style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
                 <button 
                   className="btn-outline" 
                   style={{ padding: '8px 14px', display: 'flex', alignItems: 'center', gap: 6, color: showProgressSection ? 'var(--accent-orange)' : 'var(--text-secondary)' }}

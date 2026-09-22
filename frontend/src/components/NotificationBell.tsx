@@ -27,15 +27,76 @@ export const NotificationBell: React.FC<NotificationBellProps> = ({ onNavigate, 
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [browserPermission, setBrowserPermission] = useState<NotificationPermission>(
+    typeof window !== 'undefined' && 'Notification' in window ? Notification.permission : 'default'
+  );
   const dropdownRef = useRef<HTMLDivElement>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const lastKnownCountRef = useRef<number | null>(null);
+
+  // Request browser permission for system notifications
+  const requestBrowserPermission = async () => {
+    if (typeof window !== 'undefined' && 'Notification' in window) {
+      try {
+        const perm = await Notification.requestPermission();
+        setBrowserPermission(perm);
+        if (perm === 'granted') {
+          new Notification('TaskAssign Pro (VBE)', {
+            body: 'Bạn đã bật thông báo trình duyệt thành công!',
+            icon: '/vite.svg'
+          });
+        }
+      } catch (e) {
+        console.error('Error requesting notification permission:', e);
+      }
+    }
+  };
+
+  const showSystemNotification = (title: string, message: string) => {
+    if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
+      try {
+        const noti = new Notification(title, {
+          body: message,
+          icon: '/vite.svg',
+          badge: '/vite.svg',
+          tag: 'vbe-notification'
+        });
+        noti.onclick = () => {
+          window.focus();
+          if (onNavigate) onNavigate('projects');
+          noti.close();
+        };
+      } catch (e) {
+        console.error('Failed to trigger desktop notification:', e);
+      }
+    }
+  };
 
   const fetchUnreadCount = useCallback(async () => {
     try {
       const res = await fetchWithAuth('/api/notifications/unread-count');
       if (res.ok) {
         const data = await res.json();
-        setUnreadCount(data.count || 0);
+        const newCount = data.count || 0;
+        
+        // If unread count increased, fire a native browser popup notification
+        if (lastKnownCountRef.current !== null && newCount > lastKnownCountRef.current) {
+          // Fetch the newest notification to display in desktop notification
+          try {
+            const listRes = await fetchWithAuth('/api/notifications');
+            if (listRes.ok) {
+              const listData: Notification[] = await listRes.json();
+              if (listData.length > 0 && !listData[0].is_read) {
+                showSystemNotification(listData[0].title, listData[0].message);
+              }
+            }
+          } catch {
+            showSystemNotification('Thông báo mới từ VBE Agency', `Bạn có ${newCount} thông báo mới cần xem.`);
+          }
+        }
+        
+        lastKnownCountRef.current = newCount;
+        setUnreadCount(newCount);
       }
     } catch {
       // Silent fail
@@ -234,6 +295,39 @@ export const NotificationBell: React.FC<NotificationBellProps> = ({ onNavigate, 
               </button>
             )}
           </div>
+
+          {/* Banner bật thông báo trình duyệt nếu chưa cấp quyền */}
+          {browserPermission !== 'granted' && (
+            <div style={{
+              padding: '10px 14px',
+              background: 'rgba(79, 70, 229, 0.15)',
+              borderBottom: '1px solid rgba(79, 70, 229, 0.3)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: 8,
+              fontSize: 11,
+              color: '#c7d2fe'
+            }}>
+              <span>🔔 Bật popup thông báo trên trình duyệt (Web Push)</span>
+              <button
+                onClick={requestBrowserPermission}
+                style={{
+                  background: '#4f46e5',
+                  color: '#ffffff',
+                  border: 'none',
+                  borderRadius: 4,
+                  padding: '4px 8px',
+                  fontSize: 10,
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  flexShrink: 0
+                }}
+              >
+                Kích hoạt
+              </button>
+            </div>
+          )}
 
           <div style={{ overflowY: 'auto', flex: 1 }}>
             {isLoading ? (

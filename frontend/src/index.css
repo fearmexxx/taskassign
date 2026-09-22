@@ -379,27 +379,26 @@ body {
   }
 
   /* Calendar */
+  .calendar-page,
   .calendar-container {
     display: flex !important;
     flex-direction: column !important;
     height: auto !important;
     overflow-y: auto !important;
+    padding-bottom: 80px !important;
   }
 
   .calendar-main-panel {
-    padding: 12px 6px !important;
-    overflow-x: auto !important;
-    -webkit-overflow-scrolling: touch;
+    padding: 12px 8px !important;
+    overflow-x: hidden !important;
   }
 
   .calendar-grid {
-    grid-auto-rows: 65px !important;
-    min-width: 310px !important;
-    gap: 4px !important;
+    grid-auto-rows: 58px !important;
+    gap: 3px !important;
   }
 
   .weekday-labels {
-    min-width: 310px !important;
     font-size: 10px !important;
   }
 

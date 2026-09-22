@@ -160,7 +160,7 @@ export const CalendarView: React.FC = () => {
   }).length;
 
   return (
-    <div className="calendar-page animate-fade-in">
+    <div className="calendar-page calendar-container animate-fade-in">
       <style>{`
         .calendar-page {
           flex: 1;
@@ -327,6 +327,7 @@ export const CalendarView: React.FC = () => {
           gap: 8px;
         }
         @media (max-width: 768px) {
+          .calendar-page,
           .calendar-container {
             display: flex !important;
             flex-direction: column !important;
@@ -335,27 +336,30 @@ export const CalendarView: React.FC = () => {
             overflow-y: auto !important;
           }
           .calendar-main-panel {
-            padding: 12px 6px !important;
-            overflow-x: auto !important;
-            -webkit-overflow-scrolling: touch;
+            padding: 12px 8px !important;
+            overflow-x: hidden !important;
           }
           .month-title {
-            font-size: 17px !important;
+            font-size: 16px !important;
           }
           .calendar-grid {
-            grid-auto-rows: 65px !important;
-            min-width: 310px !important;
-            gap: 4px !important;
+            grid-auto-rows: 58px !important;
+            gap: 3px !important;
           }
           .weekday-labels {
-            min-width: 310px !important;
             font-size: 10px !important;
+            margin-bottom: 8px !important;
+          }
+          .calendar-cell {
+            padding: 4px !important;
+            border-radius: 6px !important;
           }
           .day-num {
             font-size: 11px !important;
           }
           .side-stats-panel {
             padding: 14px !important;
+            margin-top: 14px !important;
           }
         }
       `}</style>

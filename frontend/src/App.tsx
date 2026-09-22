@@ -153,13 +153,15 @@ const AppContent: React.FC = () => {
         bottom: 0,
         left: 0,
         right: 0,
-        height: '62px',
+        height: '56px',
         background: '#ffffff',
         borderTop: '1px solid var(--border-color)',
+        display: 'flex',
         justifyContent: 'space-around',
         alignItems: 'center',
         zIndex: 100,
-        boxShadow: '0 -2px 10px rgba(0,0,0,0.05)'
+        boxShadow: '0 -2px 10px rgba(0,0,0,0.05)',
+        padding: '0 4px',
       }}>
         <button 
           onClick={() => setActiveTab('dashboard')} 
@@ -172,11 +174,13 @@ const AppContent: React.FC = () => {
             gap: 2,
             color: activeTab === 'dashboard' ? '#4f46e5' : '#64748b',
             cursor: 'pointer',
-            fontSize: 10,
+            fontSize: 9.5,
+            padding: '4px 2px',
+            flex: 1,
             fontWeight: activeTab === 'dashboard' ? 700 : 500
           }}
         >
-          <LayoutDashboard size={20} />
+          <LayoutDashboard size={18} />
           <span>Tổng quan</span>
         </button>
 
@@ -191,11 +195,13 @@ const AppContent: React.FC = () => {
             gap: 2,
             color: activeTab === 'projects' ? '#4f46e5' : '#64748b',
             cursor: 'pointer',
-            fontSize: 10,
+            fontSize: 9.5,
+            padding: '4px 2px',
+            flex: 1,
             fontWeight: activeTab === 'projects' ? 700 : 500
           }}
         >
-          <FolderGit2 size={20} />
+          <FolderGit2 size={18} />
           <span>Dự án</span>
         </button>
 
@@ -210,11 +216,13 @@ const AppContent: React.FC = () => {
             gap: 2,
             color: activeTab === 'calendar' ? '#4f46e5' : '#64748b',
             cursor: 'pointer',
-            fontSize: 10,
+            fontSize: 9.5,
+            padding: '4px 2px',
+            flex: 1,
             fontWeight: activeTab === 'calendar' ? 700 : 500
           }}
         >
-          <CalendarDays size={20} />
+          <CalendarDays size={18} />
           <span>Lịch & Ca</span>
         </button>
 
@@ -230,11 +238,13 @@ const AppContent: React.FC = () => {
               gap: 2,
               color: activeTab === 'salary' ? '#4f46e5' : '#64748b',
               cursor: 'pointer',
-              fontSize: 10,
+              fontSize: 9.5,
+              padding: '4px 2px',
+              flex: 1,
               fontWeight: activeTab === 'salary' ? 700 : 500
             }}
           >
-            <Wallet size={20} />
+            <Wallet size={18} />
             <span>Bảng lương</span>
           </button>
         )}
@@ -251,11 +261,13 @@ const AppContent: React.FC = () => {
               gap: 2,
               color: activeTab === 'departments' ? '#4f46e5' : '#64748b',
               cursor: 'pointer',
-              fontSize: 10,
+              fontSize: 9.5,
+              padding: '4px 2px',
+              flex: 1,
               fontWeight: activeTab === 'departments' ? 700 : 500
             }}
           >
-            <Users2 size={20} />
+            <Users2 size={18} />
             <span>Nhân sự</span>
           </button>
         ) : (
@@ -270,11 +282,13 @@ const AppContent: React.FC = () => {
               gap: 2,
               color: activeTab === 'reports' ? '#4f46e5' : '#64748b',
               cursor: 'pointer',
-              fontSize: 10,
+              fontSize: 9.5,
+              padding: '4px 2px',
+              flex: 1,
               fontWeight: activeTab === 'reports' ? 700 : 500
             }}
           >
-            <FileSpreadsheet size={20} />
+            <FileSpreadsheet size={18} />
             <span>Báo cáo</span>
           </button>
         )}

@@ -244,7 +244,7 @@ export const DepartmentManager: React.FC = () => {
   const unassignedMembers = teamMembers.filter(m => !m.department_id);
 
   return (
-    <div className="dept-page animate-fade-in">
+    <div className="dept-page dept-container animate-fade-in">
       <style>{`
         .dept-page {
           flex: 1;
@@ -387,6 +387,7 @@ export const DepartmentManager: React.FC = () => {
           border-color: #4f46e5;
         }
         @media (max-width: 768px) {
+          .dept-page,
           .dept-container {
             padding: 14px 12px 80px 12px !important;
             height: auto !important;
@@ -405,6 +406,21 @@ export const DepartmentManager: React.FC = () => {
           }
           .dept-card {
             padding: 14px !important;
+          }
+          .dept-member-item {
+            flex-wrap: wrap !important;
+            gap: 6px !important;
+            padding: 6px 0 !important;
+            border-bottom: 1px dashed rgba(0,0,0,0.05) !important;
+          }
+          .dept-member-item > span:first-child {
+            word-break: break-word !important;
+            flex: 1 1 100% !important;
+          }
+          .member-role-area {
+            width: 100% !important;
+            justify-content: space-between !important;
+            margin-top: 2px !important;
           }
           .modal-body {
             width: 94vw !important;
