@@ -123,23 +123,66 @@ CREATE TABLE IF NOT EXISTS notifications (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Seed initial data
-INSERT INTO departments (name, description) VALUES
-('Management', 'Executive and administration team'),
-('Development', 'Software engineers and developers'),
-('Design', 'UI/UX and graphic designers'),
-('Marketing', 'Digital marketing and sales team')
-ON CONFLICT DO NOTHING;
+-- 8. CRM Customers Table
+CREATE TABLE IF NOT EXISTS crm_customers (
+    id SERIAL PRIMARY KEY,
+    phone VARCHAR(50) NOT NULL UNIQUE,
+    name VARCHAR(255) NOT NULL,
+    company VARCHAR(255),
+    email VARCHAR(255),
+    social VARCHAR(255),
+    address TEXT,
+    commission_rate NUMERIC(5,2) DEFAULT 0,
+    commission_notes TEXT,
+    current_project_status VARCHAR(255),
+    past_projects_notes TEXT,
+    forecast_quarter VARCHAR(10),
+    forecast_year INTEGER,
+    forecast_revenue BIGINT DEFAULT 0,
+    forecast_notes TEXT,
+    assigned_to INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
 
-INSERT INTO users (name, email, password, role, department_id) VALUES
-('Alice Smith', 'alice@agency.com', '123456', 'Admin', 1),
-('Bob Jones', 'bob@agency.com', '123456', 'Lead', 2),
-('Charlie Brown', 'charlie@agency.com', '123456', 'Member', 2),
-('Diana Prince', 'diana@agency.com', '123456', 'Lead', 3),
-('Ethan Hunt', 'ethan@agency.com', '123456', 'Member', 3),
-('Fiona Gallagher', 'fiona@agency.com', '123456', 'Lead', 4),
-('George Clark', 'george@agency.com', '123456', 'Member', 4),
-('Hannah Abbott', 'hannah@agency.com', '123456', 'Member', 2),
-('Ian Malcolm', 'ian@agency.com', '123456', 'Member', 3),
-('Julia Roberts', 'julia@agency.com', '123456', 'Member', 4)
-ON CONFLICT DO NOTHING;
+-- 9. CRM Deals Table
+CREATE TABLE IF NOT EXISTS crm_deals (
+    id SERIAL PRIMARY KEY,
+    customer_id INTEGER REFERENCES crm_customers(id) ON DELETE CASCADE,
+    customer_phone VARCHAR(50) NOT NULL,
+    title VARCHAR(255) NOT NULL,
+    stage VARCHAR(50) CHECK (stage IN ('lead', 'brief', 'proposal', 'meeting', 'negotiation', 'won', 'execution', 'payment_report', 'lost')) DEFAULT 'lead',
+    expected_value BIGINT DEFAULT 0,
+    contract_value BIGINT DEFAULT 0,
+    paid_amount BIGINT DEFAULT 0,
+    payment_status VARCHAR(50) CHECK (payment_status IN ('unpaid', 'partial', 'paid')) DEFAULT 'unpaid',
+    project_id INTEGER REFERENCES projects(id) ON DELETE SET NULL,
+    brief_content TEXT,
+    proposal_url TEXT,
+    contract_number VARCHAR(100),
+    contract_url TEXT,
+    meeting_notes TEXT,
+    feedback_notes TEXT,
+    event_report_notes TEXT,
+    expected_close_date VARCHAR(50),
+    assigned_to INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 10. CRM Activities Table
+CREATE TABLE IF NOT EXISTS crm_activities (
+    id SERIAL PRIMARY KEY,
+    deal_id INTEGER REFERENCES crm_deals(id) ON DELETE CASCADE,
+    customer_phone VARCHAR(50),
+    user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    action_type VARCHAR(50) NOT NULL,
+    content TEXT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+ALTER TABLE projects ADD COLUMN IF NOT EXISTS crm_deal_id INTEGER;
+ALTER TABLE projects ADD COLUMN IF NOT EXISTS customer_phone VARCHAR(50);
+

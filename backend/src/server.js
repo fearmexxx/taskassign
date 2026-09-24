@@ -1710,6 +1710,879 @@ app.put('/api/notifications/read-all', authenticateToken, async (req, res) => {
   }
 });
 
+// =========================================================================
+// PHÂN HỆ CRM & QUẢN LÝ KHÁCH HÀNG (CUSTOMER RELATIONSHIP MANAGEMENT)
+// Chỉ Ban Quản Lý (Admin) và Phòng Sales & Account được phép truy cập
+// =========================================================================
+
+// Middleware phân quyền CRM
+const requireCrmAccess = async (req, res, next) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ error: 'Chưa xác thực người dùng' });
+    }
+    // 1. Admin hoặc email vinh@vbe.vn có toàn quyền
+    if (req.user.role === 'Admin' || req.user.email === 'vinh@vbe.vn') {
+      return next();
+    }
+    // 2. Kiểm tra phòng ban của user
+    if (req.user.department_id) {
+      const dept = await dbGet(`SELECT name FROM departments WHERE id = ?`, [req.user.department_id]);
+      if (dept && (dept.name.includes('Sales') || dept.name.includes('Account'))) {
+        return next();
+      }
+    }
+    return res.status(403).json({ error: 'Bạn không có quyền truy cập phân hệ CRM (Chỉ dành cho Ban Quản Lý và Phòng Sales & Account)' });
+  } catch (err) {
+    return res.status(500).json({ error: 'Lỗi kiểm tra quyền CRM: ' + err.message });
+  }
+};
+
+// Chuẩn hóa số điện thoại: bỏ khoảng trắng, dấu gạch, dấu chấm
+const normalizePhone = (phone) => {
+  if (!phone) return '';
+  return phone.toString().replace(/[\s\.\-\(\)]/g, '').trim();
+};
+
+// GET /api/crm/stats - Thống kê tổng quan CRM & Forecast
+app.get('/api/crm/stats', authenticateToken, requireCrmAccess, async (req, res) => {
+  try {
+    const totalCustomersRow = await dbGet(`SELECT COUNT(*) as count FROM crm_customers`);
+    const dealsStatsRow = await dbGet(`
+      SELECT 
+        COUNT(*) as total_deals,
+        SUM(CASE WHEN stage NOT IN ('won', 'lost') THEN expected_value ELSE 0 END) as pipeline_value,
+        SUM(CASE WHEN stage = 'won' OR stage = 'execution' OR stage = 'payment_report' THEN contract_value ELSE 0 END) as won_value,
+        SUM(paid_amount) as total_collected,
+        COUNT(CASE WHEN stage = 'lead' THEN 1 END) as count_lead,
+        COUNT(CASE WHEN stage = 'brief' THEN 1 END) as count_brief,
+        COUNT(CASE WHEN stage = 'proposal' THEN 1 END) as count_proposal,
+        COUNT(CASE WHEN stage = 'meeting' THEN 1 END) as count_meeting,
+        COUNT(CASE WHEN stage = 'negotiation' THEN 1 END) as count_negotiation,
+        COUNT(CASE WHEN stage = 'won' THEN 1 END) as count_won,
+        COUNT(CASE WHEN stage = 'execution' THEN 1 END) as count_execution,
+        COUNT(CASE WHEN stage = 'payment_report' THEN 1 END) as count_payment_report,
+        COUNT(CASE WHEN stage = 'lost' THEN 1 END) as count_lost
+      FROM crm_deals
+    `);
+
+    // Thống kê forecast theo quý
+    const forecastRows = await dbAll(`
+      SELECT 
+        forecast_year, 
+        forecast_quarter, 
+        SUM(forecast_revenue) as total_forecast, 
+        COUNT(*) as customer_count 
+      FROM crm_customers 
+      WHERE forecast_quarter IS NOT NULL AND forecast_quarter != '' 
+      GROUP BY forecast_year, forecast_quarter 
+      ORDER BY forecast_year DESC, forecast_quarter ASC
+    `);
+
+    res.json({
+      total_customers: totalCustomersRow ? totalCustomersRow.count : 0,
+      total_deals: dealsStatsRow ? (dealsStatsRow.total_deals || 0) : 0,
+      pipeline_value: dealsStatsRow ? (dealsStatsRow.pipeline_value || 0) : 0,
+      won_value: dealsStatsRow ? (dealsStatsRow.won_value || 0) : 0,
+      total_collected: dealsStatsRow ? (dealsStatsRow.total_collected || 0) : 0,
+      stage_counts: {
+        lead: dealsStatsRow ? (dealsStatsRow.count_lead || 0) : 0,
+        brief: dealsStatsRow ? (dealsStatsRow.count_brief || 0) : 0,
+        proposal: dealsStatsRow ? (dealsStatsRow.count_proposal || 0) : 0,
+        meeting: dealsStatsRow ? (dealsStatsRow.count_meeting || 0) : 0,
+        negotiation: dealsStatsRow ? (dealsStatsRow.count_negotiation || 0) : 0,
+        won: dealsStatsRow ? (dealsStatsRow.count_won || 0) : 0,
+        execution: dealsStatsRow ? (dealsStatsRow.count_execution || 0) : 0,
+        payment_report: dealsStatsRow ? (dealsStatsRow.count_payment_report || 0) : 0,
+        lost: dealsStatsRow ? (dealsStatsRow.count_lost || 0) : 0
+      },
+      forecast_by_quarter: forecastRows || []
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/crm/customers - Lấy danh bạ khách hàng
+app.get('/api/crm/customers', authenticateToken, requireCrmAccess, async (req, res) => {
+  try {
+    const { search, quarter, year } = req.query;
+    let sql = `
+      SELECT 
+        c.*, 
+        u.name as assigned_name,
+        cb.name as creator_name,
+        (SELECT COUNT(*) FROM crm_deals d WHERE d.customer_phone = c.phone) as total_deals,
+        (SELECT SUM(d.contract_value) FROM crm_deals d WHERE d.customer_phone = c.phone AND d.stage IN ('won', 'execution', 'payment_report')) as total_won_value
+      FROM crm_customers c
+      LEFT JOIN users u ON c.assigned_to = u.id
+      LEFT JOIN users cb ON c.created_by = cb.id
+      WHERE 1=1
+    `;
+    const params = [];
+
+    if (search) {
+      sql += ` AND (c.phone LIKE ? OR c.name LIKE ? OR c.company LIKE ? OR c.email LIKE ?)`;
+      const term = `%${search}%`;
+      params.push(term, term, term, term);
+    }
+    if (quarter) {
+      sql += ` AND c.forecast_quarter = ?`;
+      params.push(quarter);
+    }
+    if (year) {
+      sql += ` AND c.forecast_year = ?`;
+      params.push(parseInt(year));
+    }
+
+    sql += ` ORDER BY c.id DESC`;
+
+    const customers = await dbAll(sql, params);
+    res.json(customers);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/crm/customers/:id - Chi tiết khách hàng + lịch sử deals & projects
+app.get('/api/crm/customers/:id', authenticateToken, requireCrmAccess, async (req, res) => {
+  try {
+    const customer = await dbGet(`
+      SELECT c.*, u.name as assigned_name, cb.name as creator_name
+      FROM crm_customers c
+      LEFT JOIN users u ON c.assigned_to = u.id
+      LEFT JOIN users cb ON c.created_by = cb.id
+      WHERE c.id = ?
+    `, [req.params.id]);
+
+    if (!customer) {
+      return res.status(404).json({ error: 'Không tìm thấy khách hàng' });
+    }
+
+    // Lấy danh sách deals của khách hàng dựa trên customer_phone
+    const deals = await dbAll(`
+      SELECT d.*, p.name as project_name, u.name as assigned_name
+      FROM crm_deals d
+      LEFT JOIN projects p ON d.project_id = p.id
+      LEFT JOIN users u ON d.assigned_to = u.id
+      WHERE d.customer_phone = ?
+      ORDER BY d.id DESC
+    `, [customer.phone]);
+
+    // Lấy các activities tương tác với khách hàng này
+    const activities = await dbAll(`
+      SELECT a.*, u.name as user_name
+      FROM crm_activities a
+      LEFT JOIN users u ON a.user_id = u.id
+      WHERE a.customer_phone = ? OR a.deal_id IN (SELECT id FROM crm_deals WHERE customer_phone = ?)
+      ORDER BY a.id DESC
+      LIMIT 50
+    `, [customer.phone, customer.phone]);
+
+    res.json({
+      ...customer,
+      deals: deals || [],
+      activities: activities || []
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/crm/customers - Tạo khách hàng mới (Số điện thoại là UNIQUE KEY)
+app.post('/api/crm/customers', authenticateToken, requireCrmAccess, async (req, res) => {
+  try {
+    const {
+      phone,
+      name,
+      company,
+      email,
+      social,
+      address,
+      commission_rate,
+      commission_notes,
+      current_project_status,
+      past_projects_notes,
+      forecast_quarter,
+      forecast_year,
+      forecast_revenue,
+      forecast_notes,
+      assigned_to
+    } = req.body;
+
+    if (!phone || !name) {
+      return res.status(400).json({ error: 'Họ tên và Số điện thoại khách hàng là bắt buộc' });
+    }
+
+    const cleanPhone = normalizePhone(phone);
+    if (cleanPhone.length < 8) {
+      return res.status(400).json({ error: 'Số điện thoại không hợp lệ' });
+    }
+
+    // Kiểm tra số điện thoại đã tồn tại chưa
+    const existing = await dbGet(`SELECT id, name FROM crm_customers WHERE phone = ?`, [cleanPhone]);
+    if (existing) {
+      return res.status(400).json({ 
+        error: `Số điện thoại ${cleanPhone} đã tồn tại trong hệ thống (Khách hàng: ${existing.name}). Vui lòng kiểm tra lại.` 
+      });
+    }
+
+    const assignedId = assigned_to ? parseInt(assigned_to) : req.user.id;
+    const currentYear = new Date().getFullYear();
+
+    const result = await dbRun(`
+      INSERT INTO crm_customers (
+        phone, name, company, email, social, address,
+        commission_rate, commission_notes, current_project_status, past_projects_notes,
+        forecast_quarter, forecast_year, forecast_revenue, forecast_notes,
+        assigned_to, created_by
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `, [
+      cleanPhone,
+      name.trim(),
+      company ? company.trim() : '',
+      email ? email.trim() : '',
+      social ? social.trim() : '',
+      address ? address.trim() : '',
+      parseFloat(commission_rate) || 0,
+      commission_notes ? commission_notes.trim() : '',
+      current_project_status ? current_project_status.trim() : 'Mới tiếp cận',
+      past_projects_notes ? past_projects_notes.trim() : '',
+      forecast_quarter || 'Q1',
+      parseInt(forecast_year) || currentYear,
+      parseInt(forecast_revenue) || 0,
+      forecast_notes ? forecast_notes.trim() : '',
+      assignedId,
+      req.user.id
+    ]);
+
+    const newId = result.lastID || (result.rows && result.rows[0] ? result.rows[0].id : null);
+    const createdCustomer = await dbGet(`SELECT * FROM crm_customers WHERE phone = ?`, [cleanPhone]);
+
+    res.status(201).json({
+      message: 'Tạo khách hàng mới thành công',
+      customer: createdCustomer
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PUT /api/crm/customers/:id - Cập nhật khách hàng (ĐỒNG BỘ CHÉO KHI THAY ĐỔI SỐ ĐIỆN THOẠI)
+app.put('/api/crm/customers/:id', authenticateToken, requireCrmAccess, async (req, res) => {
+  try {
+    const customerId = req.params.id;
+    const existing = await dbGet(`SELECT * FROM crm_customers WHERE id = ?`, [customerId]);
+    if (!existing) {
+      return res.status(404).json({ error: 'Không tìm thấy khách hàng' });
+    }
+
+    const {
+      phone,
+      name,
+      company,
+      email,
+      social,
+      address,
+      commission_rate,
+      commission_notes,
+      current_project_status,
+      past_projects_notes,
+      forecast_quarter,
+      forecast_year,
+      forecast_revenue,
+      forecast_notes,
+      assigned_to
+    } = req.body;
+
+    const oldPhone = existing.phone;
+    const newPhone = phone ? normalizePhone(phone) : oldPhone;
+
+    if (!newPhone || !name) {
+      return res.status(400).json({ error: 'Họ tên và Số điện thoại khách hàng là bắt buộc' });
+    }
+
+    // Nếu đổi sang số điện thoại khác, kiểm tra xem số mới có bị trùng không
+    if (newPhone !== oldPhone) {
+      const duplicate = await dbGet(`SELECT id, name FROM crm_customers WHERE phone = ? AND id != ?`, [newPhone, customerId]);
+      if (duplicate) {
+        return res.status(400).json({ 
+          error: `Số điện thoại ${newPhone} đã được dùng cho khách hàng ${duplicate.name}` 
+        });
+      }
+    }
+
+    // 1. Cập nhật bảng crm_customers
+    await dbRun(`
+      UPDATE crm_customers SET
+        phone = ?,
+        name = ?,
+        company = ?,
+        email = ?,
+        social = ?,
+        address = ?,
+        commission_rate = ?,
+        commission_notes = ?,
+        current_project_status = ?,
+        past_projects_notes = ?,
+        forecast_quarter = ?,
+        forecast_year = ?,
+        forecast_revenue = ?,
+        forecast_notes = ?,
+        assigned_to = ?,
+        updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `, [
+      newPhone,
+      name.trim(),
+      company ? company.trim() : '',
+      email ? email.trim() : '',
+      social ? social.trim() : '',
+      address ? address.trim() : '',
+      parseFloat(commission_rate) || 0,
+      commission_notes ? commission_notes.trim() : '',
+      current_project_status ? current_project_status.trim() : '',
+      past_projects_notes ? past_projects_notes.trim() : '',
+      forecast_quarter || existing.forecast_quarter,
+      parseInt(forecast_year) || existing.forecast_year,
+      parseInt(forecast_revenue) || 0,
+      forecast_notes ? forecast_notes.trim() : '',
+      assigned_to ? parseInt(assigned_to) : existing.assigned_to,
+      customerId
+    ]);
+
+    // 2. NẾU SỐ ĐIỆN THOẠI THAY ĐỔI -> ĐỒNG BỘ CHÉO TOÀN BỘ BẢNG LIÊN QUAN
+    if (newPhone !== oldPhone) {
+      console.log(`[CRM Sync] Customer phone changed from ${oldPhone} to ${newPhone}. Cascading sync across database...`);
+      // Đồng bộ bảng crm_deals
+      await dbRun(`UPDATE crm_deals SET customer_phone = ? WHERE customer_phone = ? OR customer_id = ?`, [newPhone, oldPhone, customerId]);
+      // Đồng bộ bảng crm_activities
+      await dbRun(`UPDATE crm_activities SET customer_phone = ? WHERE customer_phone = ?`, [newPhone, oldPhone]);
+      // Đồng bộ bảng projects nếu có liên kết
+      await dbRun(`UPDATE projects SET customer_phone = ? WHERE customer_phone = ?`, [newPhone, oldPhone]);
+
+      // Ghi activity log
+      await dbRun(`
+        INSERT INTO crm_activities (customer_phone, user_id, action_type, content)
+        VALUES (?, ?, 'note', ?)
+      `, [
+        newPhone,
+        req.user.id,
+        `Đã cập nhật số điện thoại khách hàng từ ${oldPhone} sang ${newPhone} (Đồng bộ toàn hệ thống)`
+      ]);
+    }
+
+    const updated = await dbGet(`SELECT * FROM crm_customers WHERE id = ?`, [customerId]);
+    res.json({
+      message: 'Cập nhật thông tin khách hàng thành công',
+      customer: updated
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /api/crm/customers/:id - Xóa khách hàng (Chỉ Admin)
+app.delete('/api/crm/customers/:id', authenticateToken, requireCrmAccess, async (req, res) => {
+  try {
+    if (req.user.role !== 'Admin' && req.user.email !== 'vinh@vbe.vn') {
+      return res.status(403).json({ error: 'Chỉ Quản trị viên (Admin) mới có quyền xóa khách hàng' });
+    }
+
+    const customer = await dbGet(`SELECT * FROM crm_customers WHERE id = ?`, [req.params.id]);
+    if (!customer) {
+      return res.status(404).json({ error: 'Không tìm thấy khách hàng' });
+    }
+
+    await dbRun(`DELETE FROM crm_customers WHERE id = ?`, [req.params.id]);
+    res.json({ message: `Đã xóa khách hàng ${customer.name} (${customer.phone})` });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/crm/deals - Danh sách Deals / Cơ hội bán hàng
+app.get('/api/crm/deals', authenticateToken, requireCrmAccess, async (req, res) => {
+  try {
+    const { stage, search, assigned_to, customer_phone } = req.query;
+    let sql = `
+      SELECT 
+        d.*,
+        c.name as customer_name,
+        c.company as customer_company,
+        c.email as customer_email,
+        c.social as customer_social,
+        c.commission_rate,
+        c.commission_notes,
+        u.name as assigned_name,
+        cb.name as creator_name,
+        p.name as project_name,
+        p.status as project_status
+      FROM crm_deals d
+      LEFT JOIN crm_customers c ON d.customer_phone = c.phone
+      LEFT JOIN users u ON d.assigned_to = u.id
+      LEFT JOIN users cb ON d.created_by = cb.id
+      LEFT JOIN projects p ON d.project_id = p.id
+      WHERE 1=1
+    `;
+    const params = [];
+
+    if (stage) {
+      sql += ` AND d.stage = ?`;
+      params.push(stage);
+    }
+    if (assigned_to) {
+      sql += ` AND d.assigned_to = ?`;
+      params.push(parseInt(assigned_to));
+    }
+    if (customer_phone) {
+      sql += ` AND d.customer_phone = ?`;
+      params.push(normalizePhone(customer_phone));
+    }
+    if (search) {
+      sql += ` AND (d.title LIKE ? OR d.customer_phone LIKE ? OR c.name LIKE ? OR c.company LIKE ?)`;
+      const term = `%${search}%`;
+      params.push(term, term, term, term);
+    }
+
+    sql += ` ORDER BY d.id DESC`;
+
+    const deals = await dbAll(sql, params);
+    res.json(deals);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/crm/deals/:id - Chi tiết deal + timeline activities
+app.get('/api/crm/deals/:id', authenticateToken, requireCrmAccess, async (req, res) => {
+  try {
+    const deal = await dbGet(`
+      SELECT 
+        d.*,
+        c.name as customer_name,
+        c.company as customer_company,
+        c.email as customer_email,
+        c.social as customer_social,
+        c.address as customer_address,
+        c.commission_rate,
+        c.commission_notes,
+        c.current_project_status,
+        c.past_projects_notes,
+        u.name as assigned_name,
+        cb.name as creator_name,
+        p.name as project_name,
+        p.status as project_status
+      FROM crm_deals d
+      LEFT JOIN crm_customers c ON d.customer_phone = c.phone
+      LEFT JOIN users u ON d.assigned_to = u.id
+      LEFT JOIN users cb ON d.created_by = cb.id
+      LEFT JOIN projects p ON d.project_id = p.id
+      WHERE d.id = ?
+    `, [req.params.id]);
+
+    if (!deal) {
+      return res.status(404).json({ error: 'Không tìm thấy cơ hội kinh doanh' });
+    }
+
+    const activities = await dbAll(`
+      SELECT a.*, u.name as user_name
+      FROM crm_activities a
+      LEFT JOIN users u ON a.user_id = u.id
+      WHERE a.deal_id = ?
+      ORDER BY a.id DESC
+    `, [deal.id]);
+
+    res.json({
+      ...deal,
+      activities: activities || []
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/crm/deals - Tạo Deal mới (cho phép chọn hoặc tạo nhanh khách hàng theo SĐT)
+app.post('/api/crm/deals', authenticateToken, requireCrmAccess, async (req, res) => {
+  try {
+    const {
+      title,
+      customer_phone,
+      customer_name,
+      customer_company,
+      customer_email,
+      customer_social,
+      stage,
+      expected_value,
+      contract_value,
+      brief_content,
+      proposal_url,
+      expected_close_date,
+      assigned_to
+    } = req.body;
+
+    if (!title || !customer_phone) {
+      return res.status(400).json({ error: 'Tên chiến dịch và Số điện thoại khách hàng là bắt buộc' });
+    }
+
+    const cleanPhone = normalizePhone(customer_phone);
+
+    // Tìm xem khách hàng đã có trong bảng crm_customers chưa
+    let customer = await dbGet(`SELECT * FROM crm_customers WHERE phone = ?`, [cleanPhone]);
+    let customerId = customer ? customer.id : null;
+
+    // Nếu chưa có khách hàng, tự động tạo mới vào bảng crm_customers
+    if (!customer) {
+      const custName = customer_name ? customer_name.trim() : 'Khách hàng mới (' + cleanPhone + ')';
+      const custCompany = customer_company ? customer_company.trim() : '';
+      const custEmail = customer_email ? customer_email.trim() : '';
+      const custSocial = customer_social ? customer_social.trim() : '';
+      
+      const custResult = await dbRun(`
+        INSERT INTO crm_customers (phone, name, company, email, social, assigned_to, created_by)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `, [cleanPhone, custName, custCompany, custEmail, custSocial, assigned_to || req.user.id, req.user.id]);
+
+      customerId = custResult.lastID || (custResult.rows && custResult.rows[0] ? custResult.rows[0].id : null);
+      customer = await dbGet(`SELECT * FROM crm_customers WHERE phone = ?`, [cleanPhone]);
+    }
+
+    const dealStage = stage || 'lead';
+    const assignedUser = assigned_to ? parseInt(assigned_to) : req.user.id;
+
+    const result = await dbRun(`
+      INSERT INTO crm_deals (
+        customer_id, customer_phone, title, stage,
+        expected_value, contract_value, brief_content, proposal_url,
+        expected_close_date, assigned_to, created_by
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `, [
+      customerId,
+      cleanPhone,
+      title.trim(),
+      dealStage,
+      parseInt(expected_value) || 0,
+      parseInt(contract_value) || 0,
+      brief_content ? brief_content.trim() : '',
+      proposal_url ? proposal_url.trim() : '',
+      expected_close_date || '',
+      assignedUser,
+      req.user.id
+    ]);
+
+    const dealId = result.lastID || (result.rows && result.rows[0] ? result.rows[0].id : null);
+
+    // Ghi activity log
+    await dbRun(`
+      INSERT INTO crm_activities (deal_id, customer_phone, user_id, action_type, content)
+      VALUES (?, ?, ?, 'stage_change', ?)
+    `, [
+      dealId,
+      cleanPhone,
+      req.user.id,
+      `Khởi tạo cơ hội kinh doanh mới: "${title.trim()}" ở giai đoạn "${dealStage}"`
+    ]);
+
+    const createdDeal = await dbGet(`SELECT * FROM crm_deals WHERE id = ?`, [dealId]);
+
+    res.status(201).json({
+      message: 'Tạo cơ hội kinh doanh thành công',
+      deal: createdDeal
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PUT /api/crm/deals/:id - Cập nhật thông tin / giai đoạn Deal
+app.put('/api/crm/deals/:id', authenticateToken, requireCrmAccess, async (req, res) => {
+  try {
+    const dealId = req.params.id;
+    const existing = await dbGet(`SELECT * FROM crm_deals WHERE id = ?`, [dealId]);
+    if (!existing) {
+      return res.status(404).json({ error: 'Không tìm thấy cơ hội kinh doanh' });
+    }
+
+    const {
+      title,
+      stage,
+      expected_value,
+      contract_value,
+      paid_amount,
+      payment_status,
+      brief_content,
+      proposal_url,
+      contract_number,
+      contract_url,
+      meeting_notes,
+      feedback_notes,
+      event_report_notes,
+      expected_close_date,
+      assigned_to
+    } = req.body;
+
+    const newStage = stage || existing.stage;
+    const isStageChanged = newStage !== existing.stage;
+
+    await dbRun(`
+      UPDATE crm_deals SET
+        title = ?,
+        stage = ?,
+        expected_value = ?,
+        contract_value = ?,
+        paid_amount = ?,
+        payment_status = ?,
+        brief_content = ?,
+        proposal_url = ?,
+        contract_number = ?,
+        contract_url = ?,
+        meeting_notes = ?,
+        feedback_notes = ?,
+        event_report_notes = ?,
+        expected_close_date = ?,
+        assigned_to = ?,
+        updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `, [
+      title ? title.trim() : existing.title,
+      newStage,
+      expected_value !== undefined ? parseInt(expected_value) : existing.expected_value,
+      contract_value !== undefined ? parseInt(contract_value) : existing.contract_value,
+      paid_amount !== undefined ? parseInt(paid_amount) : existing.paid_amount,
+      payment_status || existing.payment_status,
+      brief_content !== undefined ? brief_content : existing.brief_content,
+      proposal_url !== undefined ? proposal_url : existing.proposal_url,
+      contract_number !== undefined ? contract_number : existing.contract_number,
+      contract_url !== undefined ? contract_url : existing.contract_url,
+      meeting_notes !== undefined ? meeting_notes : existing.meeting_notes,
+      feedback_notes !== undefined ? feedback_notes : existing.feedback_notes,
+      event_report_notes !== undefined ? event_report_notes : existing.event_report_notes,
+      expected_close_date !== undefined ? expected_close_date : existing.expected_close_date,
+      assigned_to ? parseInt(assigned_to) : existing.assigned_to,
+      dealId
+    ]);
+
+    if (isStageChanged) {
+      await dbRun(`
+        INSERT INTO crm_activities (deal_id, customer_phone, user_id, action_type, content)
+        VALUES (?, ?, ?, 'stage_change', ?)
+      `, [
+        dealId,
+        existing.customer_phone,
+        req.user.id,
+        `Chuyển giai đoạn từ "${existing.stage}" sang "${newStage}"`
+      ]);
+
+      // Đồng thời cập nhật trạng thái dự án hiện tại bên bảng crm_customers
+      const stageMap = {
+        lead: 'Đang tìm hiểu dịch vụ',
+        brief: 'Đã nhận Brief & Yêu cầu',
+        proposal: 'Đã gửi Báo giá & Proposal',
+        meeting: 'Đang họp trao đổi / Pitching',
+        negotiation: 'Đang đàm phán hợp đồng',
+        won: 'Đã chốt Deal & Ký Hợp Đồng',
+        execution: 'Đang triển khai thực thi',
+        payment_report: 'Nghiệm thu & Quyết toán thanh toán',
+        lost: 'Đã dừng / Hủy'
+      };
+      await dbRun(`
+        UPDATE crm_customers SET current_project_status = ? WHERE phone = ?
+      `, [`${existing.title}: ${stageMap[newStage] || newStage}`, existing.customer_phone]);
+    }
+
+    const updated = await dbGet(`SELECT * FROM crm_deals WHERE id = ?`, [dealId]);
+    res.json({
+      message: 'Cập nhật cơ hội kinh doanh thành công',
+      deal: updated
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /api/crm/deals/:id - Xóa deal
+app.delete('/api/crm/deals/:id', authenticateToken, requireCrmAccess, async (req, res) => {
+  try {
+    const deal = await dbGet(`SELECT * FROM crm_deals WHERE id = ?`, [req.params.id]);
+    if (!deal) {
+      return res.status(404).json({ error: 'Không tìm thấy cơ hội kinh doanh' });
+    }
+
+    await dbRun(`DELETE FROM crm_deals WHERE id = ?`, [req.params.id]);
+    res.json({ message: `Đã xóa cơ hội kinh doanh ${deal.title}` });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/crm/deals/:id/activities - Thêm hoạt động/ghi chú mới vào Deal
+app.post('/api/crm/deals/:id/activities', authenticateToken, requireCrmAccess, async (req, res) => {
+  try {
+    const { action_type, content } = req.body;
+    if (!content) {
+      return res.status(400).json({ error: 'Nội dung hoạt động là bắt buộc' });
+    }
+
+    const deal = await dbGet(`SELECT * FROM crm_deals WHERE id = ?`, [req.params.id]);
+    if (!deal) {
+      return res.status(404).json({ error: 'Không tìm thấy cơ hội kinh doanh' });
+    }
+
+    await dbRun(`
+      INSERT INTO crm_activities (deal_id, customer_phone, user_id, action_type, content)
+      VALUES (?, ?, ?, ?, ?)
+    `, [
+      deal.id,
+      deal.customer_phone,
+      req.user.id,
+      action_type || 'note',
+      content.trim()
+    ]);
+
+    const activities = await dbAll(`
+      SELECT a.*, u.name as user_name
+      FROM crm_activities a
+      LEFT JOIN users u ON a.user_id = u.id
+      WHERE a.deal_id = ?
+      ORDER BY a.id DESC
+    `, [deal.id]);
+
+    res.status(201).json({
+      message: 'Thêm hoạt động thành công',
+      activities
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/crm/deals/:id/convert-to-project - 1-CLICK TẠO DỰ ÁN THỰC THI TỪ DEAL
+app.post('/api/crm/deals/:id/convert-to-project', authenticateToken, requireCrmAccess, async (req, res) => {
+  try {
+    const dealId = req.params.id;
+    const deal = await dbGet(`
+      SELECT d.*, c.name as customer_name, c.company as customer_company, c.commission_rate, c.commission_notes
+      FROM crm_deals d
+      LEFT JOIN crm_customers c ON d.customer_phone = c.phone
+      WHERE d.id = ?
+    `, [dealId]);
+
+    if (!deal) {
+      return res.status(404).json({ error: 'Không tìm thấy cơ hội kinh doanh' });
+    }
+
+    // Nếu đã chuyển đổi dự án rồi thì trả về thông tin dự án cũ
+    if (deal.project_id) {
+      const existingProject = await dbGet(`SELECT * FROM projects WHERE id = ?`, [deal.project_id]);
+      if (existingProject) {
+        return res.json({
+          message: 'Cơ hội này đã được chuyển giao sang Dự án thực thi từ trước',
+          project: existingProject,
+          already_converted: true
+        });
+      }
+    }
+
+    const today = new Date().toISOString().split('T')[0];
+    const defaultEnd = deal.expected_close_date || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    
+    // Soạn mô tả chi tiết dự án lấy từ thông tin CRM
+    let projectDescription = `[DỰ ÁN TỪ CRM - VBE AGENCY]\n`;
+    projectDescription += `Khách hàng: ${deal.customer_name || 'N/A'}`;
+    if (deal.customer_company) projectDescription += ` (${deal.customer_company})`;
+    projectDescription += `\nHotline: ${deal.customer_phone}`;
+    if (deal.contract_value) projectDescription += `\nGiá trị hợp đồng: ${deal.contract_value.toLocaleString('vi-VN')} VNĐ`;
+    if (deal.commission_rate) projectDescription += `\nChiết khấu hoa hồng: ${deal.commission_rate}% (${deal.commission_notes || 'Thỏa thuận'})`;
+    if (deal.brief_content) projectDescription += `\n\nNỘI DUNG BRIEF:\n${deal.brief_content}`;
+
+    // 1. Tạo project mới trong bảng projects
+    const projResult = await dbRun(`
+      INSERT INTO projects (
+        name, description, status, start_date, end_date,
+        owner_id, created_by, crm_deal_id, customer_phone
+      ) VALUES (?, ?, 'Active', ?, ?, ?, ?, ?, ?)
+    `, [
+      deal.title,
+      projectDescription,
+      today,
+      defaultEnd,
+      deal.assigned_to || req.user.id,
+      req.user.id,
+      deal.id,
+      deal.customer_phone
+    ]);
+
+    const newProjectId = projResult.lastID || (projResult.rows && projResult.rows[0] ? projResult.rows[0].id : null);
+
+    // 2. Thêm người tạo và người phụ trách vào project_members
+    await dbRun(`INSERT OR IGNORE INTO project_members (project_id, user_id) VALUES (?, ?)`, [newProjectId, req.user.id]);
+    if (deal.assigned_to && deal.assigned_to !== req.user.id) {
+      await dbRun(`INSERT OR IGNORE INTO project_members (project_id, user_id) VALUES (?, ?)`, [newProjectId, deal.assigned_to]);
+    }
+
+    // 3. Tự động tạo 3 tasks khởi động ban đầu trong dự án mới
+    const defaultTasks = [
+      ['Họp Kick-off và thống nhất Timeline thực thi', 'Team họp với Account Manager để thống nhất kế hoạch chi tiết', 'InProgress', 'High'],
+      ['Chuẩn bị tài liệu & Phân bổ nhân sự các phòng ban', 'Phân bổ nhân sự Kỹ thuật, Media, Thiết kế theo brief khách hàng', 'Todo', 'Medium'],
+      ['Triển khai sản xuất & Báo cáo tiến độ cho khách', 'Thực hiện sản xuất và định kỳ cập nhật trạng thái', 'Todo', 'High']
+    ];
+
+    for (const t of defaultTasks) {
+      await dbRun(`
+        INSERT INTO tasks (title, description, project_id, status, priority, due_date, created_by, owner_id)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `, [t[0], t[1], newProjectId, t[2], t[3], defaultEnd, req.user.id, deal.assigned_to || req.user.id]);
+    }
+
+    // 4. Cập nhật deal: gắn project_id và đổi stage sang 'execution'
+    await dbRun(`
+      UPDATE crm_deals 
+      SET project_id = ?, stage = 'execution', updated_at = CURRENT_TIMESTAMP 
+      WHERE id = ?
+    `, [newProjectId, deal.id]);
+
+    // 5. Cập nhật trạng thái khách hàng
+    await dbRun(`
+      UPDATE crm_customers 
+      SET current_project_status = ? 
+      WHERE phone = ?
+    `, [`Đang triển khai thực thi: ${deal.title}`, deal.customer_phone]);
+
+    // 6. Ghi log activity
+    await dbRun(`
+      INSERT INTO crm_activities (deal_id, customer_phone, user_id, action_type, content)
+      VALUES (?, ?, ?, 'stage_change', ?)
+    `, [
+      deal.id,
+      deal.customer_phone,
+      req.user.id,
+      `Đã chuyển giao thành công sang Dự án thực thi: "${deal.title}" (ID Dự án: #${newProjectId})`
+    ]);
+
+    // 7. Tạo thông báo in-app cho người phụ trách
+    if (deal.assigned_to) {
+      await createNotification(
+        deal.assigned_to,
+        'project_added',
+        '🚀 Dự án thực thi mới từ CRM',
+        `Deal "${deal.title}" của khách hàng ${deal.customer_phone} đã được chuyển sang Dự án thực thi.`,
+        newProjectId,
+        'project'
+      );
+    }
+
+    const createdProject = await dbGet(`SELECT * FROM projects WHERE id = ?`, [newProjectId]);
+
+    res.status(201).json({
+      message: 'Chuyển giao sang Dự án thực thi thành công!',
+      project: createdProject,
+      deal_id: deal.id
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Global Error Handler Middleware
 app.use((err, req, res, next) => {
   const timestamp = new Date().toISOString();

@@ -10,8 +10,10 @@ import {
   LogOut, 
   User,
   Wallet,
-  Globe
+  Globe,
+  Briefcase
 } from 'lucide-react';
+import { canAccessCrm } from '../types/crm';
 
 interface SidebarProps {
   activeTab: string;
@@ -254,6 +256,16 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, isChe
             <FolderGit2 className="menu-item-icon" />
             <span>Dự án & Công việc</span>
           </div>
+
+          {canAccessCrm(user) && (
+            <div 
+              className={`menu-item ${activeTab === 'crm' ? 'active' : ''}`}
+              onClick={() => setActiveTab('crm')}
+            >
+              <Briefcase className="menu-item-icon" />
+              <span>CRM & Khách hàng</span>
+            </div>
+          )}
 
           <div 
             className={`menu-item ${activeTab === 'calendar' ? 'active' : ''}`}

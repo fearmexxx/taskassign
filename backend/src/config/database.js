@@ -333,8 +333,85 @@ const initDatabase = () => {
             created_at TEXT DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
           )
+        `),
+        runCreateTable(`
+          CREATE TABLE IF NOT EXISTS crm_customers (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            phone TEXT NOT NULL UNIQUE,
+            name TEXT NOT NULL,
+            company TEXT,
+            email TEXT,
+            social TEXT,
+            address TEXT,
+            commission_rate REAL DEFAULT 0,
+            commission_notes TEXT,
+            current_project_status TEXT,
+            past_projects_notes TEXT,
+            forecast_quarter TEXT,
+            forecast_year INTEGER,
+            forecast_revenue INTEGER DEFAULT 0,
+            forecast_notes TEXT,
+            assigned_to INTEGER,
+            created_by INTEGER,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (assigned_to) REFERENCES users(id) ON DELETE SET NULL,
+            FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
+          )
+        `),
+        runCreateTable(`
+          CREATE TABLE IF NOT EXISTS crm_deals (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            customer_id INTEGER,
+            customer_phone TEXT NOT NULL,
+            title TEXT NOT NULL,
+            stage TEXT CHECK(stage IN ('lead', 'brief', 'proposal', 'meeting', 'negotiation', 'won', 'execution', 'payment_report', 'lost')) DEFAULT 'lead',
+            expected_value INTEGER DEFAULT 0,
+            contract_value INTEGER DEFAULT 0,
+            paid_amount INTEGER DEFAULT 0,
+            payment_status TEXT CHECK(payment_status IN ('unpaid', 'partial', 'paid')) DEFAULT 'unpaid',
+            project_id INTEGER,
+            brief_content TEXT,
+            proposal_url TEXT,
+            contract_number TEXT,
+            contract_url TEXT,
+            meeting_notes TEXT,
+            feedback_notes TEXT,
+            event_report_notes TEXT,
+            expected_close_date TEXT,
+            assigned_to INTEGER,
+            created_by INTEGER,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (customer_id) REFERENCES crm_customers(id) ON DELETE CASCADE,
+            FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE SET NULL,
+            FOREIGN KEY (assigned_to) REFERENCES users(id) ON DELETE SET NULL,
+            FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
+          )
+        `),
+        runCreateTable(`
+          CREATE TABLE IF NOT EXISTS crm_activities (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            deal_id INTEGER,
+            customer_phone TEXT,
+            user_id INTEGER,
+            action_type TEXT NOT NULL,
+            content TEXT NOT NULL,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (deal_id) REFERENCES crm_deals(id) ON DELETE CASCADE,
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
+          )
         `)
       ])
+      .then(() => {
+        return new Promise((res) => {
+          db.run(`ALTER TABLE projects ADD COLUMN crm_deal_id INTEGER`, () => {
+            db.run(`ALTER TABLE projects ADD COLUMN customer_phone TEXT`, () => {
+              res();
+            });
+          });
+        });
+      })
       .then(() => {
         return new Promise((res) => {
           db.run(`ALTER TABLE users ADD COLUMN base_salary INTEGER DEFAULT 15000000`, (err) => {

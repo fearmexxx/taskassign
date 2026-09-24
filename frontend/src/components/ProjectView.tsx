@@ -42,6 +42,8 @@ interface Project {
   sub_owner_name?: string;
   members?: { user_id: number; name: string; role: string }[];
   departments?: { department_id: number; name: string }[];
+  crm_deal_id?: number | null;
+  customer_phone?: string | null;
 }
 
 interface DeletionLog {
@@ -1071,6 +1073,22 @@ export const ProjectView: React.FC = () => {
                   {activeProject.creator_name && (
                     <span style={{ marginLeft: 12, color: 'var(--text-secondary)' }}>
                       • Khởi tạo bởi: <strong>{activeProject.creator_name}</strong>
+                    </span>
+                  )}
+                  {activeProject.customer_phone && (
+                    <span style={{
+                      marginLeft: 12,
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 4,
+                      background: 'rgba(79, 70, 229, 0.1)',
+                      color: '#4f46e5',
+                      padding: '2px 8px',
+                      borderRadius: 12,
+                      fontSize: 11,
+                      fontWeight: 700
+                    }}>
+                      💼 Dự án từ CRM Deal #{activeProject.crm_deal_id} (Hotline: {activeProject.customer_phone})
                     </span>
                   )}
                 </div>

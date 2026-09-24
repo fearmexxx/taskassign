@@ -10,6 +10,8 @@ import { WorkReports } from './components/WorkReports';
 import { SalaryManager } from './components/SalaryManager';
 import { UserProfile } from './components/UserProfile';
 import { NotificationBell } from './components/NotificationBell';
+import { CrmView } from './components/crm/CrmView';
+import { canAccessCrm } from './types/crm';
 
 import { 
   LayoutDashboard, 
@@ -19,7 +21,8 @@ import {
   Users2, 
   FileSpreadsheet, 
   User,
-  LogOut 
+  LogOut,
+  Briefcase 
 } from 'lucide-react';
 
 const AppContent: React.FC = () => {
@@ -56,6 +59,14 @@ const AppContent: React.FC = () => {
         return <Dashboard onCheckInChange={setIsCheckedIn} setActiveTab={setActiveTab} />;
       case 'projects':
         return <ProjectView />;
+      case 'crm':
+        return canAccessCrm(user) ? (
+          <CrmView onNavigateToProject={(projId) => {
+            setActiveTab('projects');
+          }} />
+        ) : (
+          <Dashboard onCheckInChange={setIsCheckedIn} setActiveTab={setActiveTab} />
+        );
       case 'calendar':
         return <CalendarView />;
       case 'departments':
@@ -204,6 +215,29 @@ const AppContent: React.FC = () => {
           <FolderGit2 size={18} />
           <span>Dự án</span>
         </button>
+
+        {canAccessCrm(user) && (
+          <button 
+            onClick={() => setActiveTab('crm')} 
+            style={{
+              background: 'none',
+              border: 'none',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              gap: 2,
+              color: activeTab === 'crm' ? '#4f46e5' : '#64748b',
+              cursor: 'pointer',
+              fontSize: 9.5,
+              padding: '4px 2px',
+              flex: 1,
+              fontWeight: activeTab === 'crm' ? 700 : 500
+            }}
+          >
+            <Briefcase size={18} />
+            <span>CRM</span>
+          </button>
+        )}
 
         <button 
           onClick={() => setActiveTab('calendar')} 
