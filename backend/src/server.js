@@ -792,19 +792,20 @@ app.get('/api/tasks', authenticateToken, async (req, res) => {
   }
 });
 
-// Create task - All members in project can create tasks
+// Create task - All members in project can create tasks (Support subtask with parent_id)
 app.post('/api/tasks', authenticateToken, async (req, res) => {
-  const { title, description, details, attachments, project_id, assignee_id, status, priority, due_date, owner_id, sub_owner_id, members, departments } = req.body;
+  const { title, description, details, attachments, project_id, assignee_id, status, priority, due_date, owner_id, sub_owner_id, members, departments, parent_id } = req.body;
   if (!title || !title.trim()) return res.status(400).json({ error: 'Tiêu đề công việc là bắt buộc' });
   if (!project_id) return res.status(400).json({ error: 'Dự án là bắt buộc' });
 
   try {
     const rawAttachments = attachments ? (typeof attachments === 'string' ? attachments : JSON.stringify(attachments)) : null;
     const defaultOwnerId = owner_id || req.user.id;
+    const cleanParentId = parent_id ? parseInt(parent_id) : null;
 
     const result = await dbRun(
-      `INSERT INTO tasks (title, description, details, attachments, created_by, project_id, assignee_id, status, priority, due_date, owner_id, sub_owner_id) 
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO tasks (title, description, details, attachments, created_by, project_id, assignee_id, status, priority, due_date, owner_id, sub_owner_id, parent_id) 
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         title.trim(), 
         description || '', 
@@ -817,7 +818,8 @@ app.post('/api/tasks', authenticateToken, async (req, res) => {
         priority || 'Medium', 
         due_date || null, 
         defaultOwnerId, 
-        sub_owner_id || null
+        sub_owner_id || null,
+        cleanParentId
       ]
     );
 
@@ -1148,6 +1150,134 @@ app.get('/api/projects/:id/progress-matrix', authenticateToken, async (req, res)
     });
   } catch (err) {
     console.error("Progress matrix error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// --- THẢO LUẬN / COMMENT & TAG MENTION (DỰ ÁN & CÔNG VIỆC) ---
+
+// Lấy danh sách thảo luận của 1 Task hoặc 1 Project
+app.get('/api/comments', authenticateToken, async (req, res) => {
+  const { target_type, target_id } = req.query;
+  if (!target_type || !target_id) {
+    return res.status(400).json({ error: 'target_type và target_id là bắt buộc' });
+  }
+
+  try {
+    const comments = await dbAll(
+      `SELECT c.*, u.name as user_name, u.email as user_email, u.role as user_role, d.name as department_name
+       FROM comments c
+       JOIN users u ON c.user_id = u.id
+       LEFT JOIN departments d ON u.department_id = d.id
+       WHERE c.target_type = ? AND c.target_id = ?
+       ORDER BY c.created_at ASC`,
+      [target_type, target_id]
+    );
+
+    res.json(comments);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Gửi bình luận / thảo luận mới (Hỗ trợ @mention nhân sự)
+app.post('/api/comments', authenticateToken, async (req, res) => {
+  const { target_type, target_id, content } = req.body;
+  if (!target_type || !target_id || !content || !content.trim()) {
+    return res.status(400).json({ error: 'Nội dung bình luận không được để trống' });
+  }
+
+  try {
+    const cleanContent = content.trim();
+
+    const result = await dbRun(
+      `INSERT INTO comments (content, user_id, target_type, target_id, created_at)
+       VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)`,
+      [cleanContent, req.user.id, target_type, target_id]
+    );
+
+    const commentId = result.lastID;
+
+    // Lấy thông tin đối tượng đang thảo luận (Task hoặc Project)
+    let contextTitle = '';
+    let parentProjectId = null;
+    if (target_type === 'task') {
+      const task = await dbGet(`SELECT title, project_id FROM tasks WHERE id = ?`, [target_id]);
+      if (task) {
+        contextTitle = `task "${task.title}"`;
+        parentProjectId = task.project_id;
+      }
+    } else if (target_type === 'project') {
+      const proj = await dbGet(`SELECT name FROM projects WHERE id = ?`, [target_id]);
+      if (proj) {
+        contextTitle = `dự án "${proj.name}"`;
+        parentProjectId = target_id;
+      }
+    }
+
+    // 1. Quét tìm kiếm tag @name hoặc @email trong nội dung bình luận
+    // Ví dụ @vinh, @"Nguyen Hoang Vinh", @binh, @quanvo
+    const allUsers = await dbAll(`SELECT id, name, email FROM users`);
+    const mentionedUserIds = new Set();
+
+    for (const u of allUsers) {
+      if (u.id === req.user.id) continue;
+      // Kiểm tra tên người dùng hoặc email xuất hiện sau ký tự @
+      const usernameNoSpace = u.name.replace(/\s+/g, '').toLowerCase();
+      const emailPrefix = u.email.split('@')[0].toLowerCase();
+      const contentLower = cleanContent.toLowerCase();
+
+      if (
+        contentLower.includes(`@${u.name.toLowerCase()}`) ||
+        contentLower.includes(`@${emailPrefix}`) ||
+        contentLower.includes(`@${usernameNoSpace}`)
+      ) {
+        mentionedUserIds.add(u.id);
+      }
+    }
+
+    // Gửi thông báo cho những người được @tag
+    for (const uid of mentionedUserIds) {
+      createNotification(
+        uid,
+        'task_updated',
+        `Bạn được nhắc đến trong ${target_type === 'task' ? 'công việc' : 'dự án'}`,
+        `${req.user.name} đã nhắc đến bạn trong ${contextTitle}: "${cleanContent.substring(0, 80)}${cleanContent.length > 80 ? '...' : ''}"`,
+        target_id,
+        target_type
+      );
+    }
+
+    // Trả về bình luận vừa tạo
+    const createdComment = await dbGet(
+      `SELECT c.*, u.name as user_name, u.email as user_email, u.role as user_role, d.name as department_name
+       FROM comments c
+       JOIN users u ON c.user_id = u.id
+       LEFT JOIN departments d ON u.department_id = d.id
+       WHERE c.id = ?`,
+      [commentId]
+    );
+
+    res.status(201).json(createdComment);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Xóa bình luận (Chỉ tác giả hoặc Admin)
+app.delete('/api/comments/:id', authenticateToken, async (req, res) => {
+  const commentId = req.params.id;
+  try {
+    const comment = await dbGet(`SELECT * FROM comments WHERE id = ?`, [commentId]);
+    if (!comment) return res.status(404).json({ error: 'Không tìm thấy bình luận' });
+
+    if (req.user.role !== 'Admin' && comment.user_id !== req.user.id) {
+      return res.status(403).json({ error: 'Bạn chỉ có quyền xóa bình luận của chính mình' });
+    }
+
+    await dbRun(`DELETE FROM comments WHERE id = ?`, [commentId]);
+    res.json({ message: 'Xóa bình luận thành công' });
+  } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });

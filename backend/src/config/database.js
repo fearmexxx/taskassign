@@ -401,8 +401,26 @@ const initDatabase = () => {
             FOREIGN KEY (deal_id) REFERENCES crm_deals(id) ON DELETE CASCADE,
             FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
           )
+        `),
+        runCreateTable(`
+          CREATE TABLE IF NOT EXISTS comments (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            content TEXT NOT NULL,
+            user_id INTEGER NOT NULL,
+            target_type TEXT CHECK(target_type IN ('task', 'project')) NOT NULL,
+            target_id INTEGER NOT NULL,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+          )
         `)
       ])
+      .then(() => {
+        return new Promise((res) => {
+          db.run(`ALTER TABLE tasks ADD COLUMN parent_id INTEGER`, () => {
+            res();
+          });
+        });
+      })
       .then(() => {
         return new Promise((res) => {
           db.run(`ALTER TABLE projects ADD COLUMN crm_deal_id INTEGER`, () => {

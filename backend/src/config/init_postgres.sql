@@ -183,6 +183,18 @@ CREATE TABLE IF NOT EXISTS crm_activities (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+-- 11. Comments Table (Thảo luận cho Task & Project)
+CREATE TABLE IF NOT EXISTS comments (
+    id SERIAL PRIMARY KEY,
+    content TEXT NOT NULL,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    target_type VARCHAR(50) CHECK (target_type IN ('task', 'project')) NOT NULL,
+    target_id INTEGER NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+ALTER TABLE tasks ADD COLUMN IF NOT EXISTS parent_id INTEGER REFERENCES tasks(id) ON DELETE CASCADE;
 ALTER TABLE projects ADD COLUMN IF NOT EXISTS crm_deal_id INTEGER;
 ALTER TABLE projects ADD COLUMN IF NOT EXISTS customer_phone VARCHAR(50);
+
 

@@ -22,8 +22,13 @@ import {
   X,
   Building2,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  MessageSquare,
+  CornerDownRight,
+  ListTodo,
+  CheckSquare
 } from 'lucide-react';
+import { DiscussionSection } from './DiscussionSection';
 
 interface Project {
   id: number;
@@ -90,6 +95,7 @@ interface Task {
   sub_owner_name?: string;
   members?: { user_id: number; name: string }[];
   departments?: { department_id: number; name: string }[];
+  parent_id?: number | null;
 }
 
 interface DeptProgress {
@@ -120,6 +126,7 @@ interface ProgressMatrix {
 interface TeamMember {
   id: number;
   name: string;
+  email: string;
   role: string;
   department_name: string;
 }
@@ -173,6 +180,10 @@ export const ProjectView: React.FC = () => {
   const [taskSubOwner, setTaskSubOwner] = useState<number>(0);
   const [selectedTaskMembers, setSelectedTaskMembers] = useState<number[]>([]);
   const [selectedTaskDepts, setSelectedTaskDepts] = useState<number[]>([]);
+  const [taskParentId, setTaskParentId] = useState<number | null>(null);
+
+  // Project Discussion toggle state
+  const [showProjectDiscussion, setShowProjectDiscussion] = useState(false);
 
   // Task Detail View Modal (Read-only quick view + attachment downloads)
   const [viewingTask, setViewingTask] = useState<Task | null>(null);
@@ -398,7 +409,7 @@ export const ProjectView: React.FC = () => {
     }
   };
 
-  const openAddTaskModal = () => {
+  const openAddTaskModal = (parentId: number | null = null) => {
     setEditingTaskId(null);
     setTaskTitle('');
     setTaskDesc('');
@@ -411,7 +422,12 @@ export const ProjectView: React.FC = () => {
     setTaskSubOwner(0);
     setSelectedTaskMembers(user?.id ? [user.id] : []);
     setSelectedTaskDepts(user?.department_id ? [user.department_id] : []);
+    setTaskParentId(parentId);
     setShowTaskModal(true);
+  };
+
+  const openAddSubTaskModal = (parentTask: Task) => {
+    openAddTaskModal(parentTask.id);
   };
 
   const parseAttachments = (raw?: string | TaskAttachment[]): TaskAttachment[] => {
@@ -438,6 +454,7 @@ export const ProjectView: React.FC = () => {
     setTaskSubOwner(t.sub_owner_id || 0);
     setSelectedTaskMembers(t.members?.map(m => m.user_id) || []);
     setSelectedTaskDepts(t.departments?.map(d => d.department_id) || []);
+    setTaskParentId(t.parent_id || null);
     setShowTaskModal(true);
   };
 
@@ -499,7 +516,8 @@ export const ProjectView: React.FC = () => {
       owner_id: taskOwner || user?.id || null,
       sub_owner_id: taskSubOwner || null,
       members: selectedTaskMembers,
-      departments: selectedTaskDepts
+      departments: selectedTaskDepts,
+      parent_id: taskParentId
     };
 
     try {
@@ -595,12 +613,20 @@ export const ProjectView: React.FC = () => {
   const activeProject = projects.find(p => p.id === selectedProjectId);
   const projectTasks = tasks.filter(t => t.project_id === selectedProjectId);
 
-  // Group tasks by status
+  // Lấy các task chính (không có parent_id)
+  const mainTasks = projectTasks.filter(t => !t.parent_id);
+
+  // Helper lấy danh sách task con trực thuộc một task cha
+  const getSubTasks = (parentTaskId: number) => {
+    return projectTasks.filter(t => t.parent_id === parentTaskId);
+  };
+
+  // Group tasks by status (Hiển thị các task chính trên các cột Kanban)
   const tasksByStatus = {
-    Todo: projectTasks.filter(t => t.status === 'Todo'),
-    InProgress: projectTasks.filter(t => t.status === 'InProgress'),
-    Review: projectTasks.filter(t => t.status === 'Review'),
-    Done: projectTasks.filter(t => t.status === 'Done')
+    Todo: mainTasks.filter(t => t.status === 'Todo'),
+    InProgress: mainTasks.filter(t => t.status === 'InProgress'),
+    Review: mainTasks.filter(t => t.status === 'Review'),
+    Done: mainTasks.filter(t => t.status === 'Done')
   };
 
   const translateStatus = (status: string) => {
@@ -1120,12 +1146,21 @@ export const ProjectView: React.FC = () => {
                   <BarChart2 size={16} /> Tiến độ phòng ban {showProgressSection ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
                 </button>
 
+                <button 
+                  className="btn-outline" 
+                  style={{ padding: '8px 14px', display: 'flex', alignItems: 'center', gap: 6, color: showProjectDiscussion ? '#4f46e5' : 'var(--text-secondary)', borderColor: showProjectDiscussion ? '#4f46e5' : 'var(--border-color)' }}
+                  onClick={() => setShowProjectDiscussion(!showProjectDiscussion)}
+                  title="Thảo luận & Trao đổi trong dự án"
+                >
+                  <MessageSquare size={16} /> Thảo luận {showProjectDiscussion ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                </button>
+
                 {(user?.role === 'Admin' || activeProject.created_by === user?.id || activeProject.owner_id === user?.id || activeProject.sub_owner_id === user?.id) && (
                   <button className="btn-outline" style={{ padding: '8px 16px', display: 'flex', alignItems: 'center', gap: 6 }} onClick={() => openEditProjectModal(activeProject)}>
                     <Settings size={16} /> Thiết lập
                   </button>
                 )}
-                <button className="btn-neon" style={{ padding: '8px 16px', display: 'flex', alignItems: 'center', gap: 6 }} onClick={openAddTaskModal}>
+                <button className="btn-neon" style={{ padding: '8px 16px', display: 'flex', alignItems: 'center', gap: 6 }} onClick={() => openAddTaskModal(null)}>
                   <Plus size={16} /> Tạo Công Việc
                 </button>
                 {(user?.role === 'Admin' || activeProject.created_by === user?.id) && (
@@ -1135,6 +1170,18 @@ export const ProjectView: React.FC = () => {
                 )}
               </div>
             </div>
+
+            {/* KHU VỰC THẢO LUẬN DỰ ÁN */}
+            {showProjectDiscussion && (
+              <div style={{ marginBottom: 24 }}>
+                <DiscussionSection
+                  targetType="project"
+                  targetId={activeProject.id}
+                  title={`Dự án: ${activeProject.name}`}
+                  teamMembers={team.map(t => ({ id: t.id, name: t.name, email: t.email }))}
+                />
+              </div>
+            )}
 
             {/* BẢNG TIẾN ĐỘ THEO DÕI PHÒNG BAN & BAN QUẢN TRỊ */}
             {showProgressSection && progressMatrix && (
@@ -1309,6 +1356,100 @@ export const ProjectView: React.FC = () => {
                               {translatePriority(task.priority)}
                             </span>
                           </div>
+
+                          {/* DANH SÁCH TASK CON (SUBTASKS) */}
+                          {(() => {
+                            const subTasks = getSubTasks(task.id);
+                            const doneSubTasks = subTasks.filter(st => st.status === 'Done').length;
+                            return (
+                              <div style={{ marginTop: 8, background: '#f8fafc', borderRadius: 6, padding: '6px 8px', border: '1px solid #e2e8f0' }} onClick={e => e.stopPropagation()}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: subTasks.length > 0 ? 6 : 0 }}>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 700, color: '#475569' }}>
+                                    <ListTodo size={12} style={{ color: '#4f46e5' }} />
+                                    <span>Task con ({doneSubTasks}/{subTasks.length})</span>
+                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={() => openAddSubTaskModal(task)}
+                                    style={{
+                                      background: 'none',
+                                      border: 'none',
+                                      color: '#4f46e5',
+                                      fontSize: 10.5,
+                                      fontWeight: 700,
+                                      cursor: 'pointer',
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      gap: 2,
+                                      padding: '2px 4px'
+                                    }}
+                                    title="Thêm công việc con trực thuộc"
+                                  >
+                                    <Plus size={11} /> Thêm việc con
+                                  </button>
+                                </div>
+
+                                {subTasks.length > 0 && (
+                                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                    {subTasks.map(st => (
+                                      <div 
+                                        key={st.id} 
+                                        onClick={() => setViewingTask(st)}
+                                        style={{ 
+                                          display: 'flex', 
+                                          alignItems: 'center', 
+                                          justifyContent: 'space-between',
+                                          background: '#ffffff',
+                                          padding: '4px 6px',
+                                          borderRadius: 4,
+                                          border: '1px solid #e2e8f0',
+                                          fontSize: 11,
+                                          cursor: 'pointer'
+                                        }}
+                                      >
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, overflow: 'hidden' }}>
+                                          <button
+                                            type="button"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              handleUpdateTaskStatus(st.id, st.status === 'Done' ? 'Todo' : 'Done');
+                                            }}
+                                            style={{
+                                              background: 'none',
+                                              border: 'none',
+                                              cursor: 'pointer',
+                                              padding: 0,
+                                              display: 'flex',
+                                              alignItems: 'center',
+                                              color: st.status === 'Done' ? '#16a34a' : '#94a3b8'
+                                            }}
+                                            title="Đánh dấu hoàn thành"
+                                          >
+                                            <CheckSquare size={13} />
+                                          </button>
+                                          <span style={{ 
+                                            textDecoration: st.status === 'Done' ? 'line-through' : 'none',
+                                            color: st.status === 'Done' ? '#94a3b8' : '#1e293b',
+                                            fontWeight: 500,
+                                            overflow: 'hidden',
+                                            textOverflow: 'ellipsis',
+                                            whiteSpace: 'nowrap',
+                                            maxWidth: 150
+                                          }}>
+                                            {st.title}
+                                          </span>
+                                        </div>
+
+                                        <span style={{ fontSize: 9.5, color: '#64748b' }}>
+                                          {st.owner_name ? st.owner_name.split(' ').pop() : ''}
+                                        </span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })()}
 
                           {/* Di chuyển công việc nhanh */}
                           <div 
@@ -1533,12 +1674,45 @@ export const ProjectView: React.FC = () => {
             </div>
 
             <form onSubmit={handleTaskSubmit}>
+              {/* CHỌN CÔNG VIỆC CHA (NẾU LÀ TASK CON) */}
+              <div className="form-group">
+                <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <CornerDownRight size={13} style={{ color: '#4f46e5' }} />
+                  Thuộc công việc cha (Task tổng)
+                </label>
+                <select
+                  value={taskParentId || 0}
+                  onChange={e => {
+                    const val = parseInt(e.target.value);
+                    setTaskParentId(val === 0 ? null : val);
+                  }}
+                  style={{
+                    width: '100%',
+                    padding: '8px 12px',
+                    borderRadius: 6,
+                    border: '1px solid var(--border-color)',
+                    background: '#ffffff',
+                    fontSize: 13,
+                    color: 'var(--text-primary)'
+                  }}
+                >
+                  <option value={0}>-- Là công việc chính (Không có task cha) --</option>
+                  {projectTasks
+                    .filter(t => !t.parent_id && t.id !== editingTaskId)
+                    .map(t => (
+                      <option key={t.id} value={t.id}>
+                        📌 {t.title}
+                      </option>
+                    ))}
+                </select>
+              </div>
+
               <div className="form-group">
                 <label>Tiêu đề công việc *</label>
                 <input 
                   required 
                   type="text" 
-                  placeholder="Ví dụ: Thiết kế giao diện trang chủ" 
+                  placeholder={taskParentId ? "Ví dụ: Thiết kế banner hero section..." : "Ví dụ: Thiết kế giao diện trang chủ"} 
                   value={taskTitle} 
                   onChange={e => setTaskTitle(e.target.value)} 
                 />
@@ -1815,6 +1989,12 @@ export const ProjectView: React.FC = () => {
 
             {/* THÔNG TIN NHÂN SỰ & THỜI HẠN */}
             <div style={{ background: '#f8fafc', padding: 12, borderRadius: 8, border: '1px solid var(--border-color)', fontSize: 12, color: 'var(--text-secondary)', display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 16 }}>
+              {viewingTask.parent_id && (
+                <div style={{ color: '#4f46e5', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <CornerDownRight size={13} />
+                  <span>Trực thuộc task cha: <strong>{tasks.find(t => t.id === viewingTask.parent_id)?.title || `#${viewingTask.parent_id}`}</strong></span>
+                </div>
+              )}
               <div>👤 <strong>Chủ trì (PIC):</strong> {viewingTask.owner_name || 'Chưa phân công'}</div>
               {viewingTask.sub_owner_name && <div>👥 <strong>Phó chủ trì:</strong> {viewingTask.sub_owner_name}</div>}
               {viewingTask.members && viewingTask.members.length > 0 && (
@@ -1825,6 +2005,85 @@ export const ProjectView: React.FC = () => {
               )}
               <div>📅 <strong>Hạn chót:</strong> {viewingTask.due_date || 'Không có'}</div>
               {viewingTask.creator_name && <div>✍️ <strong>Người giao việc:</strong> {viewingTask.creator_name}</div>}
+            </div>
+
+            {/* DANH SÁCH TASK CON CỦA TASK NÀY (NẾU ĐÂY LÀ TASK CHA) */}
+            {!viewingTask.parent_id && (
+              <div style={{ marginBottom: 16 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <ListTodo size={14} style={{ color: '#4f46e5' }} /> Danh sách Task con trực thuộc ({getSubTasks(viewingTask.id).length}):
+                  </div>
+                  <button
+                    type="button"
+                    className="btn-outline"
+                    style={{ padding: '3px 8px', fontSize: 11, display: 'flex', alignItems: 'center', gap: 4, color: '#4f46e5', borderColor: '#4f46e5' }}
+                    onClick={() => {
+                      const parent = viewingTask;
+                      setViewingTask(null);
+                      openAddSubTaskModal(parent);
+                    }}
+                  >
+                    <Plus size={12} /> Thêm task con
+                  </button>
+                </div>
+
+                {getSubTasks(viewingTask.id).length > 0 ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    {getSubTasks(viewingTask.id).map(st => (
+                      <div
+                        key={st.id}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          background: '#f8fafc',
+                          padding: '8px 10px',
+                          borderRadius: 6,
+                          border: '1px solid #e2e8f0'
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <button
+                            type="button"
+                            onClick={() => handleUpdateTaskStatus(st.id, st.status === 'Done' ? 'Todo' : 'Done')}
+                            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, color: st.status === 'Done' ? '#16a34a' : '#94a3b8' }}
+                          >
+                            <CheckSquare size={15} />
+                          </button>
+                          <div>
+                            <span style={{ textDecoration: st.status === 'Done' ? 'line-through' : 'none', color: st.status === 'Done' ? '#94a3b8' : '#0f172a', fontWeight: 600, fontSize: 13 }}>
+                              {st.title}
+                            </span>
+                            {st.description && <div style={{ fontSize: 11, color: '#64748b' }}>{st.description}</div>}
+                          </div>
+                        </div>
+
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 11 }}>
+                          <span style={{ color: '#475569' }}>👤 {st.owner_name || 'Chưa giao'}</span>
+                          <span className={`priority-${st.priority}`} style={{ textTransform: 'uppercase', fontSize: 10 }}>
+                            {translateStatus(st.status)}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div style={{ fontSize: 12, color: 'var(--text-muted)', fontStyle: 'italic', background: '#f8fafc', padding: '8px 12px', borderRadius: 6 }}>
+                    Chưa có task con nào. Bấm "Thêm task con" để phân rã đầu việc.
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* PHẦN THẢO LUẬN (COMMENT & TAG MENTION CHO TASK) */}
+            <div style={{ marginBottom: 16 }}>
+              <DiscussionSection
+                targetType="task"
+                targetId={viewingTask.id}
+                title={`Công việc: ${viewingTask.title}`}
+                teamMembers={team.map(t => ({ id: t.id, name: t.name, email: t.email }))}
+              />
             </div>
 
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
