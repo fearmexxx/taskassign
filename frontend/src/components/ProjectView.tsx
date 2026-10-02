@@ -746,50 +746,65 @@ export const ProjectView: React.FC = () => {
           display: flex;
           justify-content: space-between;
           align-items: flex-start;
+          gap: 16px;
           border-bottom: 1px solid var(--border-color);
-          padding-bottom: 24px;
-          margin-bottom: 24px;
+          padding-bottom: 18px;
+          margin-bottom: 20px;
         }
         .project-title-desc {
           display: flex;
           flex-direction: column;
-          gap: 8px;
+          gap: 6px;
+          flex: 1;
+          min-width: 0;
         }
         .proj-name {
-          font-size: 26px;
+          font-size: 22px;
           font-weight: 700;
           color: var(--text-primary);
+          line-height: 1.3;
+          margin: 0;
         }
         .proj-desc {
           color: var(--text-secondary);
-          font-size: 14px;
-          max-width: 700px;
+          font-size: 13.5px;
+          max-width: 800px;
+          line-height: 1.5;
+          margin: 2px 0;
         }
         .proj-dates {
           font-size: 12px;
           color: var(--text-muted);
           display: flex;
           align-items: center;
-          gap: 6px;
-          margin-top: 6px;
+          gap: 8px;
+          flex-wrap: wrap;
+          margin-top: 4px;
         }
         .proj-roles-bar {
           display: flex;
-          gap: 20px;
-          margin-top: 10px;
+          flex-wrap: wrap;
+          gap: 8px;
+          margin-top: 8px;
           font-size: 12px;
         }
         .proj-role-item {
           background: #ffffff;
-          border: 1px solid var(--border-color);
-          padding: 4px 10px;
+          border: 1px solid #e2e8f0;
+          padding: 3px 9px;
           border-radius: 6px;
-          color: var(--text-secondary);
+          color: #334155;
+          font-size: 11.5px;
+          display: inline-flex;
+          align-items: center;
+          gap: 4px;
+          box-shadow: 0 1px 2px rgba(0,0,0,0.02);
         }
         .proj-dept-tags {
           display: flex;
+          flex-wrap: wrap;
           gap: 6px;
-          margin-top: 8px;
+          margin-top: 6px;
         }
         .proj-dept-tag {
           font-size: 11px;
@@ -798,6 +813,25 @@ export const ProjectView: React.FC = () => {
           padding: 2px 8px;
           border-radius: 4px;
           border: 1px solid rgba(79, 70, 229, 0.15);
+          font-weight: 500;
+        }
+        .proj-action-btns {
+          display: flex;
+          gap: 8px;
+          align-items: center;
+          flex-wrap: wrap;
+          flex-shrink: 0;
+        }
+        .proj-action-btns .btn-outline,
+        .proj-action-btns .btn-neon {
+          height: 34px !important;
+          padding: 0 12px !important;
+          font-size: 12px !important;
+          border-radius: 6px !important;
+          display: inline-flex !important;
+          align-items: center !important;
+          gap: 5px !important;
+          font-weight: 600 !important;
         }
         .board-grid {
           display: grid;
@@ -1136,36 +1170,36 @@ export const ProjectView: React.FC = () => {
                 )}
               </div>
 
-              <div className="proj-action-btns" style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+              <div className="proj-action-btns">
                 <button 
                   className="btn-outline" 
-                  style={{ padding: '8px 14px', display: 'flex', alignItems: 'center', gap: 6, color: showProgressSection ? 'var(--accent-orange)' : 'var(--text-secondary)' }}
+                  style={{ color: showProgressSection ? 'var(--accent-orange)' : 'var(--text-secondary)' }}
                   onClick={() => setShowProgressSection(!showProgressSection)}
                   title="Xem ma trận tiến độ phòng ban"
                 >
-                  <BarChart2 size={16} /> Tiến độ phòng ban {showProgressSection ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                  <BarChart2 size={14} /> Tiến độ phòng ban {showProgressSection ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
                 </button>
 
                 <button 
                   className="btn-outline" 
-                  style={{ padding: '8px 14px', display: 'flex', alignItems: 'center', gap: 6, color: showProjectDiscussion ? '#4f46e5' : 'var(--text-secondary)', borderColor: showProjectDiscussion ? '#4f46e5' : 'var(--border-color)' }}
+                  style={{ color: showProjectDiscussion ? '#4f46e5' : 'var(--text-secondary)', borderColor: showProjectDiscussion ? '#4f46e5' : 'var(--border-color)' }}
                   onClick={() => setShowProjectDiscussion(!showProjectDiscussion)}
                   title="Thảo luận & Trao đổi trong dự án"
                 >
-                  <MessageSquare size={16} /> Thảo luận {showProjectDiscussion ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                  <MessageSquare size={14} /> Thảo luận {showProjectDiscussion ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
                 </button>
 
                 {(user?.role === 'Admin' || activeProject.created_by === user?.id || activeProject.owner_id === user?.id || activeProject.sub_owner_id === user?.id) && (
-                  <button className="btn-outline" style={{ padding: '8px 16px', display: 'flex', alignItems: 'center', gap: 6 }} onClick={() => openEditProjectModal(activeProject)}>
-                    <Settings size={16} /> Thiết lập
+                  <button className="btn-outline" onClick={() => openEditProjectModal(activeProject)}>
+                    <Settings size={14} /> Thiết lập
                   </button>
                 )}
-                <button className="btn-neon" style={{ padding: '8px 16px', display: 'flex', alignItems: 'center', gap: 6 }} onClick={() => openAddTaskModal(null)}>
-                  <Plus size={16} /> Tạo Công Việc
+                <button className="btn-neon" onClick={() => openAddTaskModal(null)}>
+                  <Plus size={14} /> Tạo Công Việc
                 </button>
                 {(user?.role === 'Admin' || activeProject.created_by === user?.id) && (
-                  <button className="btn-outline" style={{ borderColor: 'var(--accent-orange)', color: 'var(--accent-orange)', padding: '8px 12px' }} onClick={() => handleDeleteProject(activeProject.id)} title="Xóa dự án (Chỉ người tạo hoặc Admin)">
-                    <Trash2 size={16} />
+                  <button className="btn-outline" style={{ borderColor: '#fca5a5', color: '#ef4444', padding: '0 8px' }} onClick={() => handleDeleteProject(activeProject.id)} title="Xóa dự án (Chỉ người tạo hoặc Admin)">
+                    <Trash2 size={14} />
                   </button>
                 )}
               </div>

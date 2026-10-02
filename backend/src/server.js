@@ -1180,20 +1180,21 @@ app.get('/api/comments', authenticateToken, async (req, res) => {
   }
 });
 
-// Gửi bình luận / thảo luận mới (Hỗ trợ @mention nhân sự)
+// Gửi bình luận / thảo luận mới (Hỗ trợ @mention nhân sự & Reply theo Thread)
 app.post('/api/comments', authenticateToken, async (req, res) => {
-  const { target_type, target_id, content } = req.body;
+  const { target_type, target_id, content, parent_id } = req.body;
   if (!target_type || !target_id || !content || !content.trim()) {
     return res.status(400).json({ error: 'Nội dung bình luận không được để trống' });
   }
 
   try {
     const cleanContent = content.trim();
+    const parentCommentId = parent_id ? parseInt(parent_id) : null;
 
     const result = await dbRun(
-      `INSERT INTO comments (content, user_id, target_type, target_id, created_at)
-       VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)`,
-      [cleanContent, req.user.id, target_type, target_id]
+      `INSERT INTO comments (content, user_id, target_type, target_id, parent_id, created_at)
+       VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`,
+      [cleanContent, req.user.id, target_type, target_id, parentCommentId]
     );
 
     const commentId = result.lastID;
@@ -1246,6 +1247,21 @@ app.post('/api/comments', authenticateToken, async (req, res) => {
         target_id,
         target_type
       );
+    }
+
+    // 2. Nếu là phản hồi (reply) cho 1 bình luận khác, thông báo cho tác giả của bình luận cha
+    if (parentCommentId) {
+      const parentComment = await dbGet(`SELECT user_id FROM comments WHERE id = ?`, [parentCommentId]);
+      if (parentComment && parentComment.user_id !== req.user.id && !mentionedUserIds.has(parentComment.user_id)) {
+        createNotification(
+          parentComment.user_id,
+          'task_updated',
+          `Phản hồi bình luận trong ${target_type === 'task' ? 'công việc' : 'dự án'}`,
+          `${req.user.name} đã trả lời bình luận của bạn trong ${contextTitle}: "${cleanContent.substring(0, 80)}${cleanContent.length > 80 ? '...' : ''}"`,
+          target_id,
+          target_type
+        );
+      }
     }
 
     // Trả về bình luận vừa tạo

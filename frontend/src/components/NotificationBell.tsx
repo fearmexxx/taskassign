@@ -240,9 +240,14 @@ export const NotificationBell: React.FC<NotificationBellProps> = ({ onNavigate, 
         <div style={{
           position: 'absolute',
           top: 'calc(100% + 8px)',
-          ...(placement === 'right' ? { right: 0 } : placement === 'left' ? { left: 0 } : { left: '50%', transform: 'translateX(-50%)' }),
-          width: 'min(340px, calc(100vw - 32px))',
-          maxHeight: 440,
+          ...(placement === 'right' 
+            ? { left: 0, right: 'auto' } 
+            : placement === 'left' 
+            ? { left: 0 } 
+            : { left: '50%', transform: 'translateX(-50%)' }),
+          width: 'min(330px, calc(100vw - 24px))',
+          maxWidth: 'calc(100vw - 24px)',
+          maxHeight: 460,
           background: '#0f172a',
           border: '1px solid rgba(0, 242, 254, 0.15)',
           borderRadius: 12,
