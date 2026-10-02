@@ -20,7 +20,7 @@ interface User {
 }
 
 export const DepartmentManager: React.FC = () => {
-  const { user, fetchWithAuth } = useAuth();
+  const { user, fetchWithAuth, refreshProfile } = useAuth();
   
   const [departments, setDepartments] = useState<Department[]>([]);
   const [teamMembers, setTeamMembers] = useState<User[]>([]);
@@ -156,6 +156,9 @@ export const DepartmentManager: React.FC = () => {
       if (res.ok) {
         closeUserModal();
         loadData();
+        if (editingUser && user && editingUser.id === user.id) {
+          await refreshProfile();
+        }
       } else {
         const data = await res.json();
         alert(data.error || 'Có lỗi xảy ra');

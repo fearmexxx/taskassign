@@ -169,7 +169,15 @@ app.get('/api/auth/me', authenticateToken, (req, res) => {
     (err, user) => {
       if (err) return res.status(500).json({ error: err.message });
       if (!user) return res.status(404).json({ error: 'Không tìm thấy người dùng' });
-      res.json(user);
+
+      // Generate a fresh token with up-to-date role and department
+      const token = jwt.sign(
+        { id: user.id, name: user.name, email: user.email, role: user.role, department_id: user.department_id },
+        JWT_SECRET,
+        { expiresIn: '24h' }
+      );
+
+      res.json({ user, token });
     }
   );
 });

@@ -585,11 +585,13 @@ const initDatabase = () => {
 
             for (const u of officialUsers) {
               await new Promise(r => {
-                db.get(`SELECT id FROM users WHERE email = ?`, [u.email], (errUser, userRow) => {
+                db.get(`SELECT id, role, department_id FROM users WHERE email = ?`, [u.email], (errUser, userRow) => {
                   if (userRow) {
+                    // Do NOT overwrite userRow.role so manual Admin/Lead promotion via UI is preserved!
+                    // Only update name and department_id if empty
                     db.run(
-                      `UPDATE users SET name = ?, role = ?, department_id = ? WHERE id = ?`,
-                      [u.name, u.role, u.deptId, userRow.id],
+                      `UPDATE users SET name = ? WHERE id = ?`,
+                      [u.name, userRow.id],
                       () => r()
                     );
                   } else {

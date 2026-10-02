@@ -16,6 +16,7 @@ interface AuthContextType {
   login: (email: string, password: string) => Promise<boolean>;
   logout: () => void;
   updateUser: (updatedUser: Partial<User>) => void;
+  refreshProfile: () => Promise<void>;
   isLoading: boolean;
   error: string | null;
   fetchWithAuth: (url: string, options?: RequestInit) => Promise<Response>;
@@ -29,14 +30,56 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const refreshProfile = async () => {
+    const currentToken = localStorage.getItem('tap_token');
+    if (!currentToken) return;
+
+    try {
+      const res = await fetch('/api/auth/me', {
+        headers: {
+          'Authorization': `Bearer ${currentToken}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        const freshUser = data.user || data;
+        const freshToken = data.token || currentToken;
+
+        localStorage.setItem('tap_user', JSON.stringify(freshUser));
+        localStorage.setItem('tap_token', freshToken);
+        setUser(freshUser);
+        setToken(freshToken);
+      } else if (res.status === 401 || res.status === 403) {
+        // Token invalid/expired
+        localStorage.removeItem('tap_token');
+        localStorage.removeItem('tap_user');
+        setToken(null);
+        setUser(null);
+      }
+    } catch (e) {
+      console.warn('Could not refresh profile from server:', e);
+    }
+  };
+
   useEffect(() => {
     const storedToken = localStorage.getItem('tap_token');
     const storedUser = localStorage.getItem('tap_user');
     if (storedToken && storedUser) {
-      setToken(storedToken);
-      setUser(JSON.parse(storedUser));
+      try {
+        setToken(storedToken);
+        setUser(JSON.parse(storedUser));
+      } catch (e) {
+        console.error('Failed to parse cached user:', e);
+      }
+      // Silently sync latest user state and role from server
+      refreshProfile().finally(() => {
+        setIsLoading(false);
+      });
+    } else {
+      setIsLoading(false);
     }
-    setIsLoading(false);
   }, []);
 
   const login = async (email: string, password: string): Promise<boolean> => {
@@ -93,7 +136,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   return (
-    <AuthContext.Provider value={{ user, token, login, logout, updateUser, isLoading, error, fetchWithAuth }}>
+    <AuthContext.Provider value={{ user, token, login, logout, updateUser, refreshProfile, isLoading, error, fetchWithAuth }}>
       {children}
     </AuthContext.Provider>
   );
