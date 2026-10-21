@@ -11,7 +11,8 @@ import {
   User,
   Wallet,
   Globe,
-  Briefcase
+  Briefcase,
+  FileCheck
 } from 'lucide-react';
 import { canAccessCrm } from '../types/crm';
 
@@ -281,6 +282,14 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, isChe
           >
             <Users2 className="menu-item-icon" />
             <span>Phòng ban & Nhân sự</span>
+          </div>
+
+          <div 
+            className={`menu-item ${activeTab === 'event-hr' ? 'active' : ''}`}
+            onClick={() => setActiveTab('event-hr')}
+          >
+            <FileCheck className="menu-item-icon" />
+            <span>Đơn từ & HR sự kiện</span>
           </div>
 
           <div 

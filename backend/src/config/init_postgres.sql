@@ -198,5 +198,112 @@ ALTER TABLE comments ADD COLUMN IF NOT EXISTS parent_id INTEGER REFERENCES comme
 ALTER TABLE tasks ADD COLUMN IF NOT EXISTS parent_id INTEGER REFERENCES tasks(id) ON DELETE CASCADE;
 ALTER TABLE projects ADD COLUMN IF NOT EXISTS crm_deal_id INTEGER;
 ALTER TABLE projects ADD COLUMN IF NOT EXISTS customer_phone VARCHAR(50);
+ALTER TABLE projects ADD COLUMN IF NOT EXISTS venue_name TEXT;
+ALTER TABLE projects ADD COLUMN IF NOT EXISTS venue_address TEXT;
+ALTER TABLE projects ADD COLUMN IF NOT EXISTS venue_lat REAL;
+ALTER TABLE projects ADD COLUMN IF NOT EXISTS venue_lng REAL;
+ALTER TABLE projects ADD COLUMN IF NOT EXISTS venue_radius INTEGER DEFAULT 300;
+
+-- 12. Event Cues (Run of Show / Cue Sheet)
+CREATE TABLE IF NOT EXISTS event_cues (
+    id SERIAL PRIMARY KEY,
+    project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    cue_order INTEGER DEFAULT 1,
+    cue_code VARCHAR(50),
+    start_time VARCHAR(50),
+    duration_mins INTEGER DEFAULT 5,
+    segment_title TEXT NOT NULL,
+    mc_script TEXT,
+    audio_cue TEXT,
+    lighting_cue TEXT,
+    visual_cue TEXT,
+    stage_notes TEXT,
+    pic_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    pic_name VARCHAR(255),
+    status VARCHAR(50) CHECK (status IN ('pending', 'standby', 'live', 'done')) DEFAULT 'pending',
+    live_started_at VARCHAR(100),
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 13. Event Logistics (Packing List & Equipment)
+CREATE TABLE IF NOT EXISTS event_logistics (
+    id SERIAL PRIMARY KEY,
+    project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    item_name TEXT NOT NULL,
+    category VARCHAR(100) DEFAULT 'Thiết bị AV',
+    quantity INTEGER DEFAULT 1,
+    unit VARCHAR(50) DEFAULT 'Cái',
+    pic_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    pic_name VARCHAR(255),
+    status VARCHAR(50) CHECK (status IN ('planned', 'checked_out', 'onsite', 'returned', 'issue')) DEFAULT 'planned',
+    notes TEXT,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 14. Event Budget Items (P&L & Vendor Payment Tracker)
+CREATE TABLE IF NOT EXISTS event_budget_items (
+    id SERIAL PRIMARY KEY,
+    project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    category VARCHAR(100) DEFAULT 'Sản xuất & Kỹ thuật',
+    item_name TEXT NOT NULL,
+    vendor_name VARCHAR(255),
+    vendor_phone VARCHAR(50),
+    unit VARCHAR(50) DEFAULT 'Gói',
+    quantity REAL DEFAULT 1,
+    estimated_unit_price BIGINT DEFAULT 0,
+    actual_unit_price BIGINT DEFAULT 0,
+    paid_amount BIGINT DEFAULT 0,
+    payment_status VARCHAR(50) CHECK (payment_status IN ('unpaid', 'deposit', 'paid')) DEFAULT 'unpaid',
+    payment_due_date VARCHAR(50),
+    notes TEXT,
+    created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 15. HR Leave, Overtime & Show Allowance Requests
+CREATE TABLE IF NOT EXISTS hr_leave_requests (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    project_id INTEGER REFERENCES projects(id) ON DELETE SET NULL,
+    request_type VARCHAR(50) CHECK (request_type IN ('leave', 'comp_off', 'overtime', 'show_allowance')) DEFAULT 'leave',
+    start_date VARCHAR(50) NOT NULL,
+    end_date VARCHAR(50) NOT NULL,
+    hours_or_days REAL DEFAULT 1,
+    allowance_amount BIGINT DEFAULT 0,
+    reason TEXT NOT NULL,
+    status VARCHAR(50) CHECK (status IN ('Pending', 'Approved', 'Rejected')) DEFAULT 'Pending',
+    approved_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    approved_at VARCHAR(100),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 16. HR Freelancers & Event Talent Pool
+CREATE TABLE IF NOT EXISTS hr_freelancers (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    phone VARCHAR(50) NOT NULL,
+    role_specialty VARCHAR(150) NOT NULL,
+    daily_rate BIGINT DEFAULT 0,
+    portfolio_link TEXT,
+    bank_info TEXT,
+    rating INTEGER DEFAULT 5,
+    notes TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 17. Voice Comms & Incident SOS Messages
+CREATE TABLE IF NOT EXISTS voice_comms_messages (
+    id SERIAL PRIMARY KEY,
+    project_id INTEGER,
+    channel VARCHAR(50) NOT NULL DEFAULT 'ALL',
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    user_name VARCHAR(255) NOT NULL,
+    user_role VARCHAR(50),
+    message_type VARCHAR(50) CHECK (message_type IN ('voice', 'sos', 'cue_call')) DEFAULT 'voice',
+    text_message TEXT,
+    audio_data TEXT,
+    duration_sec REAL DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
 
 

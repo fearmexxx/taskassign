@@ -23,6 +23,8 @@ app.use((req, res, next) => {
   if (req.method === 'POST' || req.method === 'PUT') {
     const bodyCopy = { ...req.body };
     if (bodyCopy.password) bodyCopy.password = '******';
+    // Không ghi log dữ liệu âm thanh base64 (bộ đàm) để tránh phình log
+    if (bodyCopy.audio_data) bodyCopy.audio_data = `[audio ${String(bodyCopy.audio_data).length} bytes]`;
     console.log(`  Payload:`, JSON.stringify(bodyCopy));
   }
 
@@ -542,7 +544,7 @@ app.post('/api/projects', authenticateToken, async (req, res) => {
 
 // Update project
 app.put('/api/projects/:id', authenticateToken, async (req, res) => {
-  const { name, description, status, start_date, end_date, owner_id, sub_owner_id, members, departments } = req.body;
+  const { name, description, status, start_date, end_date, owner_id, sub_owner_id, members, departments, venue_name, venue_address, venue_lat, venue_lng, venue_radius } = req.body;
   const projectId = req.params.id;
 
   if (!name || !name.trim()) return res.status(400).json({ error: 'Tên dự án là bắt buộc' });
@@ -563,9 +565,24 @@ app.put('/api/projects/:id', authenticateToken, async (req, res) => {
 
     await dbRun(
       `UPDATE projects 
-       SET name = ?, description = ?, status = ?, start_date = ?, end_date = ?, owner_id = ?, sub_owner_id = ?
+       SET name = ?, description = ?, status = ?, start_date = ?, end_date = ?, owner_id = ?, sub_owner_id = ?,
+           venue_name = ?, venue_address = ?, venue_lat = ?, venue_lng = ?, venue_radius = ?
        WHERE id = ?`,
-      [name.trim(), description || '', status || 'Active', start_date || null, end_date || null, owner_id || null, sub_owner_id || null, projectId]
+      [
+        name.trim(),
+        description !== undefined ? description : currentProj.description,
+        status || currentProj.status || 'Active',
+        start_date !== undefined ? start_date : currentProj.start_date,
+        end_date !== undefined ? end_date : currentProj.end_date,
+        owner_id !== undefined ? owner_id : currentProj.owner_id,
+        sub_owner_id !== undefined ? sub_owner_id : currentProj.sub_owner_id,
+        venue_name !== undefined ? venue_name : currentProj.venue_name,
+        venue_address !== undefined ? venue_address : currentProj.venue_address,
+        venue_lat !== undefined ? venue_lat : currentProj.venue_lat,
+        venue_lng !== undefined ? venue_lng : currentProj.venue_lng,
+        venue_radius !== undefined ? venue_radius : (currentProj.venue_radius || 300),
+        projectId
+      ]
     );
 
     // Update members
@@ -1496,30 +1513,55 @@ app.post('/api/attendance/checkin', authenticateToken, async (req, res) => {
 
     let calculatedDistance = null;
     let isGpsValid = false;
+    let matchedVenueProject = null;
 
-    // Check GPS
+    // Check GPS against Office AND Active Event Venues
     if (latitude && longitude) {
       const userLat = parseFloat(latitude);
       const userLng = parseFloat(longitude);
       calculatedDistance = calculateDistanceMeters(userLat, userLng, settings.office_lat, settings.office_lng);
       isGpsValid = calculatedDistance <= settings.max_distance_meters;
+
+      if (!isGpsValid) {
+        // Check if user is at an active Project Event Venue
+        const venueProjects = await dbAll(
+          `SELECT id, name, venue_name, venue_lat, venue_lng, venue_radius 
+           FROM projects 
+           WHERE status = 'Active' AND venue_lat IS NOT NULL AND venue_lng IS NOT NULL`
+        );
+        for (const vp of venueProjects) {
+          const distToVenue = calculateDistanceMeters(userLat, userLng, parseFloat(vp.venue_lat), parseFloat(vp.venue_lng));
+          const maxVenueRadius = vp.venue_radius || 300;
+          if (distToVenue <= maxVenueRadius) {
+            isGpsValid = true;
+            matchedVenueProject = { ...vp, distance: distToVenue };
+            calculatedDistance = distToVenue;
+            break;
+          }
+        }
+      }
     }
 
-    // Decide location type: Office vs Remote
+    // Decide location type: Office vs Onsite Event vs Remote
     let locationType = 'Office';
     let checkInReason = reason ? reason.trim() : null;
 
     if (!isGpsValid) {
-      locationType = 'Remote'; // Ngoài văn phòng (> 200m)
+      locationType = 'Remote'; // Ngoài văn phòng & ngoài địa điểm sự kiện
       
       // Bắt buộc phải có lý do nếu ở ngoài văn phòng
       if (!checkInReason) {
         return res.status(400).json({
-          error: `Bạn đang ở cách văn phòng ${calculatedDistance || 'nhiều'}m (ngoài bán kính 200m). Vui lòng xác nhận và nhập lý do làm việc ngoài văn phòng (Làm việc tại nhà, Gặp khách hàng, Công tác...).`,
+          error: `Bạn đang ở cách văn phòng ${calculatedDistance || 'nhiều'}m (ngoài bán kính 200m). Vui lòng xác nhận và nhập lý do làm việc ngoài văn phòng (Chạy sự kiện, Gặp khách hàng, Làm việc từ xa...).`,
           requires_reason: true,
           distance: calculatedDistance,
           max_distance: settings.max_distance_meters
         });
+      }
+    } else if (matchedVenueProject) {
+      locationType = 'Office';
+      if (!checkInReason) {
+        checkInReason = `📍 Chạy sự kiện Onsite: ${matchedVenueProject.venue_name || matchedVenueProject.name} (${matchedVenueProject.distance}m)`;
       }
     } else {
       locationType = 'Office'; // Có mặt tại văn phòng
@@ -1702,6 +1744,18 @@ app.get('/api/attendance/salary-report', authenticateToken, async (req, res) => 
       return h + m / 60 + s / 3600;
     };
 
+    // Đơn HR đã duyệt trong tháng: phụ cấp chạy show, OT, nghỉ phép có lương
+    let approvedRequests = [];
+    try {
+      approvedRequests = await dbAll(
+        `SELECT user_id, request_type, hours_or_days, allowance_amount FROM hr_leave_requests
+         WHERE status = 'Approved' AND start_date LIKE ?`,
+        [`${month}-%`]
+      );
+    } catch (e) {
+      approvedRequests = [];
+    }
+
     const report = users.map(u => {
       const logs = attendanceLogs.filter(log => log.user_id === u.id);
       
@@ -1734,6 +1788,16 @@ app.get('/api/attendance/salary-report', authenticateToken, async (req, res) => 
 
       const absentDays = Math.max(0, 23 - presentDays);
 
+      // Cộng phụ cấp show / OT và lương ngày nghỉ phép đã duyệt
+      const myRequests = approvedRequests.filter(r => r.user_id === u.id);
+      const allowanceTotal = myRequests
+        .filter(r => r.request_type === 'show_allowance' || r.request_type === 'overtime')
+        .reduce((sum, r) => sum + (Number(r.allowance_amount) || 0), 0);
+      const paidLeaveDays = myRequests
+        .filter(r => r.request_type === 'leave' || r.request_type === 'comp_off')
+        .reduce((sum, r) => sum + (Number(r.hours_or_days) || 0), 0);
+      calculatedSalary += paidLeaveDays * dailyRate + allowanceTotal;
+
       return {
         user_id: u.id,
         name: u.name,
@@ -1746,6 +1810,8 @@ app.get('/api/attendance/salary-report', authenticateToken, async (req, res) => 
         late_days: lateDays,
         absent_days: absentDays,
         hours_worked: Math.round(totalHoursWorked * 100) / 100,
+        allowance_total: allowanceTotal,
+        paid_leave_days: paidLeaveDays,
         calculated_salary: Math.round(calculatedSalary)
       };
     });
@@ -2736,6 +2802,20 @@ app.post('/api/crm/deals/:id/convert-to-project', authenticateToken, requireCrmA
     res.status(500).json({ error: err.message });
   }
 });
+
+// =========================================================================
+// EVENT SUITE: Kịch bản Run of Show, Hậu cần, Ngân sách P&L, HR sự kiện, Bộ đàm
+// =========================================================================
+{
+  const { createHelpers } = require('./routes/eventHelpers');
+  const eventCtx = {
+    dbAll, dbGet, dbRun, authenticateToken, requireRole, createNotification,
+    helpers: createHelpers({ dbGet, dbAll })
+  };
+  require('./routes/eventCues')(app, eventCtx);
+  require('./routes/eventOps')(app, eventCtx);
+  require('./routes/eventHr')(app, eventCtx);
+}
 
 // Global Error Handler Middleware
 app.use((err, req, res, next) => {

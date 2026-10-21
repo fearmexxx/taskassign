@@ -414,6 +414,118 @@ const initDatabase = () => {
             FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
             FOREIGN KEY (parent_id) REFERENCES comments(id) ON DELETE CASCADE
           )
+        `),
+        runCreateTable(`
+          CREATE TABLE IF NOT EXISTS event_cues (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            project_id INTEGER NOT NULL,
+            cue_order INTEGER DEFAULT 1,
+            cue_code TEXT,
+            start_time TEXT,
+            duration_mins INTEGER DEFAULT 5,
+            segment_title TEXT NOT NULL,
+            mc_script TEXT,
+            audio_cue TEXT,
+            lighting_cue TEXT,
+            visual_cue TEXT,
+            stage_notes TEXT,
+            pic_id INTEGER,
+            pic_name TEXT,
+            status TEXT CHECK(status IN ('pending', 'standby', 'live', 'done')) DEFAULT 'pending',
+            live_started_at TEXT,
+            updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+            FOREIGN KEY (pic_id) REFERENCES users(id) ON DELETE SET NULL
+          )
+        `),
+        runCreateTable(`
+          CREATE TABLE IF NOT EXISTS event_logistics (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            project_id INTEGER NOT NULL,
+            item_name TEXT NOT NULL,
+            category TEXT DEFAULT 'Thiết bị AV',
+            quantity INTEGER DEFAULT 1,
+            unit TEXT DEFAULT 'Cái',
+            pic_id INTEGER,
+            pic_name TEXT,
+            status TEXT CHECK(status IN ('planned', 'checked_out', 'onsite', 'returned', 'issue')) DEFAULT 'planned',
+            notes TEXT,
+            updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+            FOREIGN KEY (pic_id) REFERENCES users(id) ON DELETE SET NULL
+          )
+        `),
+        runCreateTable(`
+          CREATE TABLE IF NOT EXISTS event_budget_items (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            project_id INTEGER NOT NULL,
+            category TEXT DEFAULT 'Sản xuất & Kỹ thuật',
+            item_name TEXT NOT NULL,
+            vendor_name TEXT,
+            vendor_phone TEXT,
+            unit TEXT DEFAULT 'Gói',
+            quantity REAL DEFAULT 1,
+            estimated_unit_price INTEGER DEFAULT 0,
+            actual_unit_price INTEGER DEFAULT 0,
+            paid_amount INTEGER DEFAULT 0,
+            payment_status TEXT CHECK(payment_status IN ('unpaid', 'deposit', 'paid')) DEFAULT 'unpaid',
+            payment_due_date TEXT,
+            notes TEXT,
+            created_by INTEGER,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+            FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
+          )
+        `),
+        runCreateTable(`
+          CREATE TABLE IF NOT EXISTS hr_leave_requests (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            project_id INTEGER,
+            request_type TEXT CHECK(request_type IN ('leave', 'comp_off', 'overtime', 'show_allowance')) DEFAULT 'leave',
+            start_date TEXT NOT NULL,
+            end_date TEXT NOT NULL,
+            hours_or_days REAL DEFAULT 1,
+            allowance_amount INTEGER DEFAULT 0,
+            reason TEXT NOT NULL,
+            status TEXT CHECK(status IN ('Pending', 'Approved', 'Rejected')) DEFAULT 'Pending',
+            approved_by INTEGER,
+            approved_at TEXT,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+            FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE SET NULL,
+            FOREIGN KEY (approved_by) REFERENCES users(id) ON DELETE SET NULL
+          )
+        `),
+        runCreateTable(`
+          CREATE TABLE IF NOT EXISTS hr_freelancers (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            phone TEXT NOT NULL,
+            role_specialty TEXT NOT NULL,
+            daily_rate INTEGER DEFAULT 0,
+            portfolio_link TEXT,
+            bank_info TEXT,
+            rating INTEGER DEFAULT 5,
+            notes TEXT,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP
+          )
+        `),
+        runCreateTable(`
+          CREATE TABLE IF NOT EXISTS voice_comms_messages (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            project_id INTEGER,
+            channel TEXT NOT NULL DEFAULT 'ALL',
+            user_id INTEGER NOT NULL,
+            user_name TEXT NOT NULL,
+            user_role TEXT,
+            message_type TEXT CHECK(message_type IN ('voice', 'sos', 'cue_call')) DEFAULT 'voice',
+            text_message TEXT,
+            audio_data TEXT,
+            duration_sec REAL DEFAULT 0,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+          )
         `)
       ])
       .then(() => {
@@ -434,7 +546,17 @@ const initDatabase = () => {
         return new Promise((res) => {
           db.run(`ALTER TABLE projects ADD COLUMN crm_deal_id INTEGER`, () => {
             db.run(`ALTER TABLE projects ADD COLUMN customer_phone TEXT`, () => {
-              res();
+              db.run(`ALTER TABLE projects ADD COLUMN venue_name TEXT`, () => {
+                db.run(`ALTER TABLE projects ADD COLUMN venue_address TEXT`, () => {
+                  db.run(`ALTER TABLE projects ADD COLUMN venue_lat REAL`, () => {
+                    db.run(`ALTER TABLE projects ADD COLUMN venue_lng REAL`, () => {
+                      db.run(`ALTER TABLE projects ADD COLUMN venue_radius INTEGER DEFAULT 300`, () => {
+                        res();
+                      });
+                    });
+                  });
+                });
+              });
             });
           });
         });

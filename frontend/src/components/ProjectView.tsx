@@ -26,9 +26,17 @@ import {
   MessageSquare,
   CornerDownRight,
   ListTodo,
-  CheckSquare
+  CheckSquare,
+  Radio,
+  Box,
+  DollarSign,
+  MapPin
 } from 'lucide-react';
 import { DiscussionSection } from './DiscussionSection';
+import { EventRunOfShow } from './events/EventRunOfShow';
+import { EventLogistics } from './events/EventLogistics';
+import { EventBudget } from './events/EventBudget';
+import { VoiceCommsDrawer } from './events/VoiceCommsDrawer';
 
 interface Project {
   id: number;
@@ -49,6 +57,11 @@ interface Project {
   departments?: { department_id: number; name: string }[];
   crm_deal_id?: number | null;
   customer_phone?: string | null;
+  venue_name?: string | null;
+  venue_address?: string | null;
+  venue_lat?: number | null;
+  venue_lng?: number | null;
+  venue_radius?: number | null;
 }
 
 interface DeletionLog {
@@ -165,6 +178,14 @@ export const ProjectView: React.FC = () => {
   const [newProjectSubOwner, setNewProjectSubOwner] = useState<number>(0);
   const [selectedProjMembers, setSelectedProjMembers] = useState<number[]>([]);
   const [selectedProjDepts, setSelectedProjDepts] = useState<number[]>([]);
+  const [newProjectVenueName, setNewProjectVenueName] = useState('');
+  const [newProjectVenueAddress, setNewProjectVenueAddress] = useState('');
+  const [newProjectVenueLat, setNewProjectVenueLat] = useState<string>('');
+  const [newProjectVenueLng, setNewProjectVenueLng] = useState<string>('');
+  const [newProjectVenueRadius, setNewProjectVenueRadius] = useState<number>(300);
+
+  // Event Suite View Sub-tab: 'tasks' | 'cues' | 'logistics' | 'budget'
+  const [projectSubTab, setProjectSubTab] = useState<'tasks' | 'cues' | 'logistics' | 'budget'>('tasks');
 
   // Task Modal (Add / Edit) state
   const [showTaskModal, setShowTaskModal] = useState(false);
@@ -257,6 +278,11 @@ export const ProjectView: React.FC = () => {
     setNewProjectSubOwner(proj.sub_owner_id || 0);
     setSelectedProjMembers(proj.members?.map(m => m.user_id) || []);
     setSelectedProjDepts(proj.departments?.map(d => d.department_id) || []);
+    setNewProjectVenueName(proj.venue_name || '');
+    setNewProjectVenueAddress(proj.venue_address || '');
+    setNewProjectVenueLat(proj.venue_lat !== null && proj.venue_lat !== undefined ? String(proj.venue_lat) : '');
+    setNewProjectVenueLng(proj.venue_lng !== null && proj.venue_lng !== undefined ? String(proj.venue_lng) : '');
+    setNewProjectVenueRadius(proj.venue_radius || 300);
     setShowEditProject(true);
   };
 
@@ -327,7 +353,12 @@ export const ProjectView: React.FC = () => {
           owner_id: newProjectOwner || null,
           sub_owner_id: newProjectSubOwner || null,
           members: selectedProjMembers,
-          departments: selectedProjDepts
+          departments: selectedProjDepts,
+          venue_name: newProjectVenueName || null,
+          venue_address: newProjectVenueAddress || null,
+          venue_lat: newProjectVenueLat ? parseFloat(newProjectVenueLat) : null,
+          venue_lng: newProjectVenueLng ? parseFloat(newProjectVenueLng) : null,
+          venue_radius: newProjectVenueRadius || 300
         }),
       });
 
@@ -354,6 +385,11 @@ export const ProjectView: React.FC = () => {
     setNewProjectSubOwner(0);
     setSelectedProjMembers(user?.id ? [user.id] : []);
     setSelectedProjDepts(user?.department_id ? [user.department_id] : []);
+    setNewProjectVenueName('');
+    setNewProjectVenueAddress('');
+    setNewProjectVenueLat('');
+    setNewProjectVenueLng('');
+    setNewProjectVenueRadius(300);
   };
 
   const handleDeleteProject = async (projectId: number) => {
@@ -1151,6 +1187,22 @@ export const ProjectView: React.FC = () => {
                       💼 Dự án từ CRM Deal #{activeProject.crm_deal_id} (Hotline: {activeProject.customer_phone})
                     </span>
                   )}
+                  {activeProject.venue_name && (
+                    <span style={{
+                      marginLeft: 12,
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 4,
+                      background: 'rgba(16, 185, 129, 0.1)',
+                      color: '#10b981',
+                      padding: '2px 8px',
+                      borderRadius: 12,
+                      fontSize: 11,
+                      fontWeight: 700
+                    }}>
+                      <MapPin size={12} /> Địa điểm: {activeProject.venue_name}
+                    </span>
+                  )}
                 </div>
                 
                 <div className="proj-roles-bar">
@@ -1310,7 +1362,127 @@ export const ProjectView: React.FC = () => {
               </div>
             )}
 
-            {/* BẢNG KANBAN CÔNG VIỆC */}
+            {/* EVENT SUITE TABS & BOARD GRID */}
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              borderBottom: '2px solid #e2e8f0',
+              marginBottom: 16,
+              paddingBottom: 2,
+              overflowX: 'auto'
+            }}>
+              <button
+                onClick={() => setProjectSubTab('tasks')}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  padding: '8px 16px',
+                  border: 'none',
+                  borderBottom: projectSubTab === 'tasks' ? '3px solid #4f46e5' : '3px solid transparent',
+                  background: 'none',
+                  color: projectSubTab === 'tasks' ? '#4f46e5' : '#64748b',
+                  fontWeight: 700,
+                  fontSize: 13,
+                  cursor: 'pointer',
+                  whiteSpace: 'nowrap'
+                }}
+              >
+                <ListTodo size={15} /> Công Việc Chuẩn Bị ({tasks.filter(t => t.project_id === activeProject.id).length})
+              </button>
+
+              <button
+                onClick={() => setProjectSubTab('cues')}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  padding: '8px 16px',
+                  border: 'none',
+                  borderBottom: projectSubTab === 'cues' ? '3px solid #ef4444' : '3px solid transparent',
+                  background: 'none',
+                  color: projectSubTab === 'cues' ? '#ef4444' : '#64748b',
+                  fontWeight: 700,
+                  fontSize: 13,
+                  cursor: 'pointer',
+                  whiteSpace: 'nowrap'
+                }}
+              >
+                <Radio size={15} color={projectSubTab === 'cues' ? '#ef4444' : '#64748b'} />
+                Kịch Bản Điều Hành & Cue Sheet (Run of Show)
+              </button>
+
+              <button
+                onClick={() => setProjectSubTab('logistics')}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  padding: '8px 16px',
+                  border: 'none',
+                  borderBottom: projectSubTab === 'logistics' ? '3px solid #0284c7' : '3px solid transparent',
+                  background: 'none',
+                  color: projectSubTab === 'logistics' ? '#0284c7' : '#64748b',
+                  fontWeight: 700,
+                  fontSize: 13,
+                  cursor: 'pointer',
+                  whiteSpace: 'nowrap'
+                }}
+              >
+                <Box size={15} color={projectSubTab === 'logistics' ? '#0284c7' : '#64748b'} />
+                Hậu Cần & Packing List
+              </button>
+
+              <button
+                onClick={() => setProjectSubTab('budget')}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  padding: '8px 16px',
+                  border: 'none',
+                  borderBottom: projectSubTab === 'budget' ? '3px solid #16a34a' : '3px solid transparent',
+                  background: 'none',
+                  color: projectSubTab === 'budget' ? '#16a34a' : '#64748b',
+                  fontWeight: 700,
+                  fontSize: 13,
+                  cursor: 'pointer',
+                  whiteSpace: 'nowrap'
+                }}
+              >
+                <DollarSign size={15} color={projectSubTab === 'budget' ? '#16a34a' : '#64748b'} />
+                Dự Toán P&L & Nhà Cung Cấp
+              </button>
+            </div>
+
+            {/* HIỂN THỊ PHÂN HỆ RUN OF SHOW CUE SHEET */}
+            {projectSubTab === 'cues' && (
+              <EventRunOfShow
+                projectId={activeProject.id}
+                projectName={activeProject.name}
+                canManage={user?.role === 'Admin' || activeProject.created_by === user?.id || activeProject.owner_id === user?.id || activeProject.sub_owner_id === user?.id}
+              />
+            )}
+
+            {/* HIỂN THỊ PHÂN HỆ HẬU CẦN & PACKING LIST */}
+            {projectSubTab === 'logistics' && (
+              <EventLogistics
+                projectId={activeProject.id}
+                canManage={user?.role === 'Admin' || activeProject.created_by === user?.id || activeProject.owner_id === user?.id || activeProject.sub_owner_id === user?.id}
+              />
+            )}
+
+            {/* HIỂN THỊ PHÂN HỆ DỰ TOÁN P&L & VENDORS */}
+            {projectSubTab === 'budget' && (
+              <EventBudget
+                projectId={activeProject.id}
+                canManage={user?.role === 'Admin' || activeProject.created_by === user?.id || activeProject.owner_id === user?.id || activeProject.sub_owner_id === user?.id}
+              />
+            )}
+
+            {/* BẢNG KANBAN CÔNG VIỆC CHUẨN BỊ (TAB 'tasks') */}
+            {projectSubTab === 'tasks' && (
             <div className="board-grid">
               {(['Todo', 'InProgress', 'Review', 'Done'] as const).map(colStatus => {
                 const columnTasks = tasksByStatus[colStatus];
@@ -1508,6 +1680,7 @@ export const ProjectView: React.FC = () => {
                 );
               })}
             </div>
+            )}
           </>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flex: 1, color: 'var(--text-secondary)', padding: '40px 20px', textAlign: 'center' }}>
@@ -1599,6 +1772,43 @@ export const ProjectView: React.FC = () => {
                 </div>
               </div>
 
+              {/* CÀI ĐẶT ĐỊA ĐIỂM SỰ KIỆN & GPS CHẤM CÔNG ONSITE */}
+              <div style={{
+                background: '#f8fafc',
+                border: '1px solid #cbd5e1',
+                borderRadius: 8,
+                padding: 12,
+                marginTop: 12
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 700, color: '#0f172a', marginBottom: 8 }}>
+                  <MapPin size={15} color="#10b981" /> Địa Điểm Sự Kiện & Tọa Độ GPS (Chấm Công Onsite)
+                </div>
+                <div className="form-row">
+                  <div className="form-group">
+                    <label>Tên địa điểm / Trung tâm hội nghị</label>
+                    <input type="text" placeholder="VD: GEM Center / White Palace" value={newProjectVenueName} onChange={e => setNewProjectVenueName(e.target.value)} />
+                  </div>
+                  <div className="form-group">
+                    <label>Địa chỉ tổ chức</label>
+                    <input type="text" placeholder="VD: 8 Nguyễn Bỉnh Khiêm, Q.1" value={newProjectVenueAddress} onChange={e => setNewProjectVenueAddress(e.target.value)} />
+                  </div>
+                </div>
+                <div className="form-row" style={{ marginTop: 6 }}>
+                  <div className="form-group">
+                    <label>Latitude (Vĩ độ)</label>
+                    <input type="text" placeholder="VD: 10.7891" value={newProjectVenueLat} onChange={e => setNewProjectVenueLat(e.target.value)} />
+                  </div>
+                  <div className="form-group">
+                    <label>Longitude (Kinh độ)</label>
+                    <input type="text" placeholder="VD: 106.7002" value={newProjectVenueLng} onChange={e => setNewProjectVenueLng(e.target.value)} />
+                  </div>
+                  <div className="form-group">
+                    <label>Bán kính hợp lệ (mét)</label>
+                    <input type="number" min="50" step="50" value={newProjectVenueRadius} onChange={e => setNewProjectVenueRadius(parseInt(e.target.value) || 300)} />
+                  </div>
+                </div>
+              </div>
+
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, marginTop: 24 }}>
                 <button type="button" className="btn-outline" style={{ padding: '8px 16px' }} onClick={() => { setShowAddProject(false); resetProjectForm(); }}>Hủy</button>
                 <button type="submit" className="btn-neon" style={{ padding: '8px 16px' }}>Bắt đầu dự án</button>
@@ -1677,6 +1887,43 @@ export const ProjectView: React.FC = () => {
                 <div className="form-group">
                   <label>Ngày kết thúc (Hạn chót)</label>
                   <input type="date" value={newProjectEnd} onChange={e => setNewProjectEnd(e.target.value)} />
+                </div>
+              </div>
+
+              {/* CÀI ĐẶT ĐỊA ĐIỂM SỰ KIỆN & GPS CHẤM CÔNG ONSITE */}
+              <div style={{
+                background: '#f8fafc',
+                border: '1px solid #cbd5e1',
+                borderRadius: 8,
+                padding: 12,
+                marginTop: 12
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 700, color: '#0f172a', marginBottom: 8 }}>
+                  <MapPin size={15} color="#10b981" /> Địa Điểm Sự Kiện & Tọa Độ GPS (Chấm Công Onsite)
+                </div>
+                <div className="form-row">
+                  <div className="form-group">
+                    <label>Tên địa điểm / Trung tâm hội nghị</label>
+                    <input type="text" placeholder="VD: GEM Center / White Palace" value={newProjectVenueName} onChange={e => setNewProjectVenueName(e.target.value)} />
+                  </div>
+                  <div className="form-group">
+                    <label>Địa chỉ tổ chức</label>
+                    <input type="text" placeholder="VD: 8 Nguyễn Bỉnh Khiêm, Q.1" value={newProjectVenueAddress} onChange={e => setNewProjectVenueAddress(e.target.value)} />
+                  </div>
+                </div>
+                <div className="form-row" style={{ marginTop: 6 }}>
+                  <div className="form-group">
+                    <label>Latitude (Vĩ độ)</label>
+                    <input type="text" placeholder="VD: 10.7891" value={newProjectVenueLat} onChange={e => setNewProjectVenueLat(e.target.value)} />
+                  </div>
+                  <div className="form-group">
+                    <label>Longitude (Kinh độ)</label>
+                    <input type="text" placeholder="VD: 106.7002" value={newProjectVenueLng} onChange={e => setNewProjectVenueLng(e.target.value)} />
+                  </div>
+                  <div className="form-group">
+                    <label>Bán kính hợp lệ (mét)</label>
+                    <input type="number" min="50" step="50" value={newProjectVenueRadius} onChange={e => setNewProjectVenueRadius(parseInt(e.target.value) || 300)} />
+                  </div>
                 </div>
               </div>
 
@@ -2235,6 +2482,14 @@ export const ProjectView: React.FC = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {/* BỘ ĐÀM DIGITAL WALKIE-TALKIE CHO DỰ ÁN */}
+      {activeProject && (
+        <VoiceCommsDrawer
+          projectId={activeProject.id}
+          projectName={activeProject.name}
+        />
       )}
     </div>
   );

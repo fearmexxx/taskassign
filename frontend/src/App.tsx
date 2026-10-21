@@ -12,6 +12,7 @@ import { UserProfile } from './components/UserProfile';
 import { NotificationBell } from './components/NotificationBell';
 import { CrmView } from './components/crm/CrmView';
 import { canAccessCrm } from './types/crm';
+import { EventHrManagement } from './components/events/EventHrManagement';
 
 import { 
   LayoutDashboard, 
@@ -22,7 +23,8 @@ import {
   FileSpreadsheet, 
   User,
   LogOut,
-  Briefcase 
+  Briefcase,
+  FileCheck
 } from 'lucide-react';
 
 const AppContent: React.FC = () => {
@@ -71,6 +73,8 @@ const AppContent: React.FC = () => {
         return <CalendarView />;
       case 'departments':
         return <DepartmentManager />;
+      case 'event-hr':
+        return <EventHrManagement />;
       case 'reports':
         return <WorkReports />;
       case 'salary':
@@ -282,6 +286,27 @@ const AppContent: React.FC = () => {
             <span>Bảng lương</span>
           </button>
         )}
+
+        <button 
+          onClick={() => setActiveTab('event-hr')} 
+          style={{
+            background: 'none',
+            border: 'none',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            gap: 2,
+            color: activeTab === 'event-hr' ? '#4f46e5' : '#64748b',
+            cursor: 'pointer',
+            fontSize: 9.5,
+            padding: '4px 2px',
+            flex: 1,
+            fontWeight: activeTab === 'event-hr' ? 700 : 500
+          }}
+        >
+          <FileCheck size={18} />
+          <span>Đơn & Show</span>
+        </button>
 
         {user.role === 'Admin' || user.role === 'Lead' ? (
           <button 
