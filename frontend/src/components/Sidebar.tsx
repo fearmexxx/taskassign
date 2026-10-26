@@ -12,7 +12,8 @@ import {
   Wallet,
   Globe,
   Briefcase,
-  FileCheck
+  FileCheck,
+  Radio
 } from 'lucide-react';
 import { canAccessCrm } from '../types/crm';
 
@@ -256,6 +257,30 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, isChe
           >
             <FolderGit2 className="menu-item-icon" />
             <span>Dự án & Công việc</span>
+          </div>
+
+          <div 
+            className={`menu-item ${activeTab === 'live-event' ? 'active' : ''}`}
+            onClick={() => setActiveTab('live-event')}
+            style={{
+              position: 'relative',
+              background: activeTab === 'live-event' ? 'rgba(239, 68, 68, 0.12)' : undefined,
+              borderColor: activeTab === 'live-event' ? 'rgba(239, 68, 68, 0.3)' : undefined
+            }}
+          >
+            <Radio className="menu-item-icon" style={{ color: activeTab === 'live-event' ? '#ef4444' : '#f87171' }} />
+            <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flex: 1 }}>
+              <span>Điều Hành Live Event</span>
+              <span style={{
+                fontSize: 9.5,
+                fontWeight: 900,
+                background: '#ef4444',
+                color: '#fff',
+                padding: '1px 6px',
+                borderRadius: 10,
+                letterSpacing: 0.5
+              }}>LIVE</span>
+            </span>
           </div>
 
           {canAccessCrm(user) && (

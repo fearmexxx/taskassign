@@ -33,10 +33,8 @@ import {
   MapPin
 } from 'lucide-react';
 import { DiscussionSection } from './DiscussionSection';
-import { EventRunOfShow } from './events/EventRunOfShow';
 import { EventLogistics } from './events/EventLogistics';
 import { EventBudget } from './events/EventBudget';
-import { VoiceCommsDrawer } from './events/VoiceCommsDrawer';
 
 interface Project {
   id: number;
@@ -149,7 +147,11 @@ interface Department {
   name: string;
 }
 
-export const ProjectView: React.FC = () => {
+interface ProjectViewProps {
+  onOpenLiveEvent?: (projectId: number) => void;
+}
+
+export const ProjectView: React.FC<ProjectViewProps> = ({ onOpenLiveEvent }) => {
   const { user, fetchWithAuth } = useAuth();
   
   const [projects, setProjects] = useState<Project[]>([]);
@@ -185,7 +187,7 @@ export const ProjectView: React.FC = () => {
   const [newProjectVenueRadius, setNewProjectVenueRadius] = useState<number>(300);
 
   // Event Suite View Sub-tab: 'tasks' | 'cues' | 'logistics' | 'budget'
-  const [projectSubTab, setProjectSubTab] = useState<'tasks' | 'cues' | 'logistics' | 'budget'>('tasks');
+  const [projectSubTab, setProjectSubTab] = useState<'tasks' | 'logistics' | 'budget'>('tasks');
 
   // Task Modal (Add / Edit) state
   const [showTaskModal, setShowTaskModal] = useState(false);
@@ -1366,104 +1368,105 @@ export const ProjectView: React.FC = () => {
             <div style={{
               display: 'flex',
               alignItems: 'center',
-              gap: 8,
+              justifyContent: 'space-between',
+              gap: 12,
               borderBottom: '2px solid #e2e8f0',
               marginBottom: 16,
-              paddingBottom: 2,
-              overflowX: 'auto'
+              paddingBottom: 4,
+              flexWrap: 'wrap'
             }}>
-              <button
-                onClick={() => setProjectSubTab('tasks')}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 6,
-                  padding: '8px 16px',
-                  border: 'none',
-                  borderBottom: projectSubTab === 'tasks' ? '3px solid #4f46e5' : '3px solid transparent',
-                  background: 'none',
-                  color: projectSubTab === 'tasks' ? '#4f46e5' : '#64748b',
-                  fontWeight: 700,
-                  fontSize: 13,
-                  cursor: 'pointer',
-                  whiteSpace: 'nowrap'
-                }}
-              >
-                <ListTodo size={15} /> Công Việc Chuẩn Bị ({tasks.filter(t => t.project_id === activeProject.id).length})
-              </button>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                <button
+                  onClick={() => setProjectSubTab('tasks')}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    padding: '8px 16px',
+                    borderRadius: '8px 8px 0 0',
+                    border: 'none',
+                    borderBottom: projectSubTab === 'tasks' ? '3px solid #4f46e5' : '3px solid transparent',
+                    background: projectSubTab === 'tasks' ? 'rgba(79, 70, 229, 0.05)' : 'none',
+                    color: projectSubTab === 'tasks' ? '#4f46e5' : '#64748b',
+                    fontWeight: 700,
+                    fontSize: 13,
+                    cursor: 'pointer',
+                    whiteSpace: 'nowrap'
+                  }}
+                >
+                  <ListTodo size={15} /> Công Việc Chuẩn Bị ({tasks.filter(t => t.project_id === activeProject.id).length})
+                </button>
 
-              <button
-                onClick={() => setProjectSubTab('cues')}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 6,
-                  padding: '8px 16px',
-                  border: 'none',
-                  borderBottom: projectSubTab === 'cues' ? '3px solid #ef4444' : '3px solid transparent',
-                  background: 'none',
-                  color: projectSubTab === 'cues' ? '#ef4444' : '#64748b',
-                  fontWeight: 700,
-                  fontSize: 13,
-                  cursor: 'pointer',
-                  whiteSpace: 'nowrap'
-                }}
-              >
-                <Radio size={15} color={projectSubTab === 'cues' ? '#ef4444' : '#64748b'} />
-                Kịch Bản Điều Hành & Cue Sheet (Run of Show)
-              </button>
+                <button
+                  onClick={() => setProjectSubTab('logistics')}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    padding: '8px 16px',
+                    borderRadius: '8px 8px 0 0',
+                    border: 'none',
+                    borderBottom: projectSubTab === 'logistics' ? '3px solid #0284c7' : '3px solid transparent',
+                    background: projectSubTab === 'logistics' ? 'rgba(2, 132, 199, 0.05)' : 'none',
+                    color: projectSubTab === 'logistics' ? '#0284c7' : '#64748b',
+                    fontWeight: 700,
+                    fontSize: 13,
+                    cursor: 'pointer',
+                    whiteSpace: 'nowrap'
+                  }}
+                >
+                  <Box size={15} color={projectSubTab === 'logistics' ? '#0284c7' : '#64748b'} />
+                  Hậu Cần & Packing List
+                </button>
 
-              <button
-                onClick={() => setProjectSubTab('logistics')}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 6,
-                  padding: '8px 16px',
-                  border: 'none',
-                  borderBottom: projectSubTab === 'logistics' ? '3px solid #0284c7' : '3px solid transparent',
-                  background: 'none',
-                  color: projectSubTab === 'logistics' ? '#0284c7' : '#64748b',
-                  fontWeight: 700,
-                  fontSize: 13,
-                  cursor: 'pointer',
-                  whiteSpace: 'nowrap'
-                }}
-              >
-                <Box size={15} color={projectSubTab === 'logistics' ? '#0284c7' : '#64748b'} />
-                Hậu Cần & Packing List
-              </button>
+                <button
+                  onClick={() => setProjectSubTab('budget')}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    padding: '8px 16px',
+                    borderRadius: '8px 8px 0 0',
+                    border: 'none',
+                    borderBottom: projectSubTab === 'budget' ? '3px solid #16a34a' : '3px solid transparent',
+                    background: projectSubTab === 'budget' ? 'rgba(22, 163, 74, 0.05)' : 'none',
+                    color: projectSubTab === 'budget' ? '#16a34a' : '#64748b',
+                    fontWeight: 700,
+                    fontSize: 13,
+                    cursor: 'pointer',
+                    whiteSpace: 'nowrap'
+                  }}
+                >
+                  <DollarSign size={15} color={projectSubTab === 'budget' ? '#16a34a' : '#64748b'} />
+                  Dự Toán P&L & Nhà Cung Cấp
+                </button>
+              </div>
 
+              {/* NÚT CHUYỂN SANG PHÒNG ĐIỀU HÀNH LIVE SHOW */}
               <button
-                onClick={() => setProjectSubTab('budget')}
+                onClick={() => onOpenLiveEvent && onOpenLiveEvent(activeProject.id)}
                 style={{
                   display: 'flex',
                   alignItems: 'center',
-                  gap: 6,
-                  padding: '8px 16px',
+                  gap: 8,
+                  padding: '7px 16px',
+                  background: 'linear-gradient(135deg, #ef4444, #dc2626)',
+                  color: '#fff',
+                  borderRadius: 8,
                   border: 'none',
-                  borderBottom: projectSubTab === 'budget' ? '3px solid #16a34a' : '3px solid transparent',
-                  background: 'none',
-                  color: projectSubTab === 'budget' ? '#16a34a' : '#64748b',
                   fontWeight: 700,
-                  fontSize: 13,
+                  fontSize: 12.5,
                   cursor: 'pointer',
+                  boxShadow: '0 2px 10px rgba(239, 68, 68, 0.25)',
+                  transition: 'all 0.2s ease',
                   whiteSpace: 'nowrap'
                 }}
+                title="Mở Phòng Điều Hành Live Event & Bộ Đàm chuyên dụng"
               >
-                <DollarSign size={15} color={projectSubTab === 'budget' ? '#16a34a' : '#64748b'} />
-                Dự Toán P&L & Nhà Cung Cấp
+                <Radio size={14} className="animate-pulse" />
+                <span>🔴 Vào Điều Hành LIVE Event (Cue Sheet & Bộ Đàm) →</span>
               </button>
             </div>
-
-            {/* HIỂN THỊ PHÂN HỆ RUN OF SHOW CUE SHEET */}
-            {projectSubTab === 'cues' && (
-              <EventRunOfShow
-                projectId={activeProject.id}
-                projectName={activeProject.name}
-                canManage={user?.role === 'Admin' || activeProject.created_by === user?.id || activeProject.owner_id === user?.id || activeProject.sub_owner_id === user?.id}
-              />
-            )}
 
             {/* HIỂN THỊ PHÂN HỆ HẬU CẦN & PACKING LIST */}
             {projectSubTab === 'logistics' && (
@@ -2482,14 +2485,6 @@ export const ProjectView: React.FC = () => {
             </div>
           </div>
         </div>
-      )}
-
-      {/* BỘ ĐÀM DIGITAL WALKIE-TALKIE CHO DỰ ÁN */}
-      {activeProject && (
-        <VoiceCommsDrawer
-          projectId={activeProject.id}
-          projectName={activeProject.name}
-        />
       )}
     </div>
   );

@@ -13,6 +13,7 @@ import { NotificationBell } from './components/NotificationBell';
 import { CrmView } from './components/crm/CrmView';
 import { canAccessCrm } from './types/crm';
 import { EventHrManagement } from './components/events/EventHrManagement';
+import { LiveEventControl } from './components/events/LiveEventControl';
 
 import { 
   LayoutDashboard, 
@@ -21,16 +22,18 @@ import {
   Wallet, 
   Users2, 
   FileSpreadsheet, 
-  User,
-  LogOut,
-  Briefcase,
-  FileCheck
+  User, 
+  LogOut, 
+  Briefcase, 
+  FileCheck,
+  Radio
 } from 'lucide-react';
 
 const AppContent: React.FC = () => {
   const { user, token, isLoading, logout } = useAuth();
   const [activeTab, setActiveTab] = useState('dashboard');
   const [isCheckedIn, setIsCheckedIn] = useState(false);
+  const [liveEventProjectId, setLiveEventProjectId] = useState<number | null>(null);
 
   if (isLoading) {
     return (
@@ -60,7 +63,22 @@ const AppContent: React.FC = () => {
       case 'dashboard':
         return <Dashboard onCheckInChange={setIsCheckedIn} setActiveTab={setActiveTab} />;
       case 'projects':
-        return <ProjectView />;
+        return (
+          <ProjectView 
+            onOpenLiveEvent={(projId) => {
+              setLiveEventProjectId(projId);
+              setActiveTab('live-event');
+            }} 
+          />
+        );
+      case 'live-event':
+        return (
+          <LiveEventControl 
+            selectedProjectId={liveEventProjectId}
+            onSelectProject={(id) => setLiveEventProjectId(id)}
+            onNavigateToProjects={() => setActiveTab('projects')}
+          />
+        );
       case 'crm':
         return canAccessCrm(user) ? (
           <CrmView onNavigateToProject={(projId) => {
@@ -218,6 +236,27 @@ const AppContent: React.FC = () => {
         >
           <FolderGit2 size={18} />
           <span>Dự án</span>
+        </button>
+
+        <button 
+          onClick={() => setActiveTab('live-event')} 
+          style={{
+            background: 'none',
+            border: 'none',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            gap: 2,
+            color: activeTab === 'live-event' ? '#ef4444' : '#64748b',
+            cursor: 'pointer',
+            fontSize: 9.5,
+            padding: '4px 2px',
+            flex: 1,
+            fontWeight: activeTab === 'live-event' ? 700 : 500
+          }}
+        >
+          <Radio size={18} color={activeTab === 'live-event' ? '#ef4444' : '#64748b'} />
+          <span>Live Show</span>
         </button>
 
         {canAccessCrm(user) && (

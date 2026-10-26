@@ -18,11 +18,12 @@ import {
 interface VoiceCommsDrawerProps {
   projectId?: number | null;
   projectName?: string;
+  embedded?: boolean;
 }
 
-export const VoiceCommsDrawer: React.FC<VoiceCommsDrawerProps> = ({ projectId, projectName }) => {
+export const VoiceCommsDrawer: React.FC<VoiceCommsDrawerProps> = ({ projectId, projectName, embedded = false }) => {
   const { fetchWithAuth, user } = useAuth();
-  const [isOpen, setIsOpen] = useState(false);
+  const [isOpen, setIsOpen] = useState(embedded ? true : false);
   const [channel, setChannel] = useState<CommsChannel>('ALL');
   const [messages, setMessages] = useState<VoiceCommsMessage[]>([]);
   const [textInput, setTextInput] = useState('');
@@ -141,15 +142,21 @@ export const VoiceCommsDrawer: React.FC<VoiceCommsDrawerProps> = ({ projectId, p
   const filteredMessages = messages.filter(m => channel === 'ALL' || m.channel === channel);
 
   return (
-    <div style={{
+    <div style={embedded ? {
+      display: 'flex',
+      flexDirection: 'column',
+      width: '100%',
+      height: '100%',
+      fontFamily: 'var(--font-family)'
+    } : {
       position: 'fixed',
       bottom: 16,
       right: 20,
       zIndex: 9000,
       fontFamily: 'var(--font-family)'
     }}>
-      {/* NÚT THU GỌN / MỞ BỘ ĐÀM */}
-      {!isOpen ? (
+      {/* NÚT THU GỌN / MỞ BỘ ĐÀM (CHỈ DÀNH CHO DẠNG NỔI FLOATING) */}
+      {!embedded && !isOpen ? (
         <button
           onClick={() => setIsOpen(true)}
           style={{
@@ -182,11 +189,13 @@ export const VoiceCommsDrawer: React.FC<VoiceCommsDrawerProps> = ({ projectId, p
       ) : (
         /* HỘP BỘ ĐÀM MỞ RỘNG */
         <div style={{
-          width: 360,
-          height: 480,
+          width: embedded ? '100%' : 360,
+          height: embedded ? '100%' : 480,
+          maxHeight: embedded ? '100%' : 480,
+          flex: embedded ? 1 : undefined,
           background: '#0f172a',
-          borderRadius: 16,
-          boxShadow: '0 20px 50px rgba(0,0,0,0.4)',
+          borderRadius: embedded ? 12 : 16,
+          boxShadow: embedded ? 'none' : '0 20px 50px rgba(0,0,0,0.4)',
           border: '1px solid #334155',
           display: 'flex',
           flexDirection: 'column',
@@ -232,12 +241,14 @@ export const VoiceCommsDrawer: React.FC<VoiceCommsDrawerProps> = ({ projectId, p
               >
                 <AlertTriangle size={12} /> SOS
               </button>
-              <button
-                onClick={() => setIsOpen(false)}
-                style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer' }}
-              >
-                <X size={16} />
-              </button>
+              {!embedded && (
+                <button
+                  onClick={() => setIsOpen(false)}
+                  style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer' }}
+                >
+                  <X size={16} />
+                </button>
+              )}
             </div>
           </div>
 
