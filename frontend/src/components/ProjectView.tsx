@@ -163,6 +163,7 @@ export const ProjectView: React.FC<ProjectViewProps> = ({ onOpenLiveEvent }) => 
   // Progress Matrix State
   const [progressMatrix, setProgressMatrix] = useState<ProgressMatrix | null>(null);
   const [showProgressSection, setShowProgressSection] = useState(true);
+  const [isDescExpanded, setIsDescExpanded] = useState(false);
 
   // Deletion logs modal state (Admin only)
   const [showDeletionLogs, setShowDeletionLogs] = useState(false);
@@ -264,6 +265,7 @@ export const ProjectView: React.FC<ProjectViewProps> = ({ onOpenLiveEvent }) => 
   }, []);
 
   useEffect(() => {
+    setIsDescExpanded(false);
     if (selectedProjectId) {
       loadProgressMatrix(selectedProjectId);
     } else {
@@ -773,7 +775,7 @@ export const ProjectView: React.FC<ProjectViewProps> = ({ onOpenLiveEvent }) => 
           justify-content: space-between;
         }
         .project-details-area {
-          padding: 32px;
+          padding: 20px 24px;
           overflow-y: auto;
           height: 100%;
           display: flex;
@@ -782,76 +784,82 @@ export const ProjectView: React.FC<ProjectViewProps> = ({ onOpenLiveEvent }) => 
         }
         .details-header {
           display: flex;
-          justify-content: space-between;
-          align-items: flex-start;
-          gap: 16px;
-          border-bottom: 1px solid var(--border-color);
-          padding-bottom: 18px;
-          margin-bottom: 20px;
-        }
-        .project-title-desc {
-          display: flex;
           flex-direction: column;
-          gap: 6px;
-          flex: 1;
+          gap: 10px;
+          border-bottom: 1px solid var(--border-color);
+          padding-bottom: 14px;
+          margin-bottom: 16px;
+          width: 100%;
+        }
+        .details-top-bar {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          gap: 14px;
+          flex-wrap: wrap;
+          width: 100%;
+        }
+        .proj-title-group {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          flex-wrap: wrap;
           min-width: 0;
+          flex: 1;
         }
         .proj-name {
-          font-size: 22px;
+          font-size: 20px;
           font-weight: 700;
           color: var(--text-primary);
           line-height: 1.3;
           margin: 0;
         }
-        .proj-desc {
-          color: var(--text-secondary);
-          font-size: 13.5px;
-          max-width: 800px;
-          line-height: 1.5;
-          margin: 2px 0;
-        }
-        .proj-dates {
-          font-size: 12px;
-          color: var(--text-muted);
+        .proj-meta-horizontal {
           display: flex;
           align-items: center;
           gap: 8px;
           flex-wrap: wrap;
-          margin-top: 4px;
-        }
-        .proj-roles-bar {
-          display: flex;
-          flex-wrap: wrap;
-          gap: 8px;
-          margin-top: 8px;
           font-size: 12px;
+          width: 100%;
         }
         .proj-role-item {
           background: #ffffff;
           border: 1px solid #e2e8f0;
-          padding: 3px 9px;
+          padding: 4px 10px;
           border-radius: 6px;
           color: #334155;
-          font-size: 11.5px;
+          font-size: 12px;
           display: inline-flex;
           align-items: center;
-          gap: 4px;
+          gap: 5px;
           box-shadow: 0 1px 2px rgba(0,0,0,0.02);
+          white-space: nowrap;
         }
         .proj-dept-tags {
-          display: flex;
+          display: inline-flex;
+          align-items: center;
           flex-wrap: wrap;
           gap: 6px;
-          margin-top: 6px;
         }
         .proj-dept-tag {
-          font-size: 11px;
+          font-size: 11.5px;
           background: rgba(79, 70, 229, 0.08);
           color: #4f46e5;
-          padding: 2px 8px;
+          padding: 3px 8px;
           border-radius: 4px;
           border: 1px solid rgba(79, 70, 229, 0.15);
-          font-weight: 500;
+          font-weight: 600;
+          white-space: nowrap;
+        }
+        .proj-desc-box {
+          background: #f8fafc;
+          border: 1px solid #e2e8f0;
+          border-radius: 8px;
+          padding: 8px 12px;
+          font-size: 12.5px;
+          color: #475569;
+          line-height: 1.5;
+          width: 100%;
         }
         .proj-action-btns {
           display: flex;
@@ -862,7 +870,10 @@ export const ProjectView: React.FC<ProjectViewProps> = ({ onOpenLiveEvent }) => 
         }
         .proj-action-btns .btn-outline,
         .proj-action-btns .btn-neon {
-          height: 34px !important;
+          height: 32px !important;
+          padding: 0 12px !important;
+          font-size: 12.5px !important;
+        }
           padding: 0 12px !important;
           font-size: 12px !important;
           border-radius: 6px !important;
@@ -1053,13 +1064,20 @@ export const ProjectView: React.FC<ProjectViewProps> = ({ onOpenLiveEvent }) => 
           .details-header {
             flex-direction: column !important;
             align-items: stretch !important;
-            gap: 12px !important;
+            gap: 10px !important;
           }
-          .proj-roles-bar {
+          .details-top-bar {
             flex-direction: column !important;
+            align-items: stretch !important;
+            gap: 10px !important;
+          }
+          .proj-meta-horizontal {
+            flex-direction: column !important;
+            align-items: stretch !important;
             gap: 6px !important;
           }
           .proj-role-item {
+            white-space: normal !important;
             word-break: break-word !important;
             line-height: 1.4 !important;
           }
@@ -1162,101 +1180,131 @@ export const ProjectView: React.FC<ProjectViewProps> = ({ onOpenLiveEvent }) => 
         {activeProject ? (
           <>
             <div className="details-header">
-              <div className="project-title-desc">
-                <h1 className="proj-name">{activeProject.name}</h1>
-                <p className="proj-desc">{activeProject.description}</p>
-                <div className="proj-dates">
+              {/* HÀNG 1: TÊN DỰ ÁN + PHÒNG BAN PHỤ TRÁCH & NÚT THAO TÁC (SCALE NGANG 100%) */}
+              <div className="details-top-bar">
+                <div className="proj-title-group">
+                  <h1 className="proj-name">{activeProject.name}</h1>
+                  {activeProject.departments && activeProject.departments.length > 0 && (
+                    <div className="proj-dept-tags" style={{ marginTop: 0 }}>
+                      {activeProject.departments.map(d => (
+                        <span key={d.department_id} className="proj-dept-tag">🏢 {translateDept(d.name)}</span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div className="proj-action-btns">
+                  <button 
+                    className="btn-outline" 
+                    style={{ color: showProgressSection ? 'var(--accent-orange)' : 'var(--text-secondary)' }}
+                    onClick={() => setShowProgressSection(!showProgressSection)}
+                    title="Xem ma trận tiến độ phòng ban"
+                  >
+                    <BarChart2 size={14} /> Tiến độ phòng ban {showProgressSection ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+                  </button>
+
+                  <button 
+                    className="btn-outline" 
+                    style={{ color: showProjectDiscussion ? '#4f46e5' : 'var(--text-secondary)', borderColor: showProjectDiscussion ? '#4f46e5' : 'var(--border-color)' }}
+                    onClick={() => setShowProjectDiscussion(!showProjectDiscussion)}
+                    title="Thảo luận & Trao đổi trong dự án"
+                  >
+                    <MessageSquare size={14} /> Thảo luận {showProjectDiscussion ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+                  </button>
+
+                  {(user?.role === 'Admin' || activeProject.created_by === user?.id || activeProject.owner_id === user?.id || activeProject.sub_owner_id === user?.id) && (
+                    <button className="btn-outline" onClick={() => openEditProjectModal(activeProject)}>
+                      <Settings size={14} /> Thiết lập
+                    </button>
+                  )}
+                  <button className="btn-neon" onClick={() => openAddTaskModal(null)}>
+                    <Plus size={14} /> Tạo Công Việc
+                  </button>
+                  {(user?.role === 'Admin' || activeProject.created_by === user?.id) && (
+                    <button className="btn-outline" style={{ borderColor: '#fca5a5', color: '#ef4444', padding: '0 8px' }} onClick={() => handleDeleteProject(activeProject.id)} title="Xóa dự án (Chỉ người tạo hoặc Admin)">
+                      <Trash2 size={14} />
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* HÀNG 2: THÔNG TIN NHÂN SỰ PHÒNG BAN & SIÊU DỮ LIỆU DÀN HÀNG NGANG (SCALE NGANG 100%) */}
+              <div className="proj-meta-horizontal">
+                {/* Thời gian */}
+                <span className="proj-role-item" style={{ background: '#f8fafc', color: '#475569' }}>
                   <Calendar size={13} />
-                  <span>Thời gian: {activeProject.start_date} đến {activeProject.end_date}</span>
-                  {activeProject.creator_name && (
-                    <span style={{ marginLeft: 12, color: 'var(--text-secondary)' }}>
-                      • Khởi tạo bởi: <strong>{activeProject.creator_name}</strong>
-                    </span>
-                  )}
-                  {activeProject.customer_phone && (
-                    <span style={{
-                      marginLeft: 12,
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: 4,
-                      background: 'rgba(79, 70, 229, 0.1)',
-                      color: '#4f46e5',
-                      padding: '2px 8px',
-                      borderRadius: 12,
-                      fontSize: 11,
-                      fontWeight: 700
-                    }}>
-                      💼 Dự án từ CRM Deal #{activeProject.crm_deal_id} (Hotline: {activeProject.customer_phone})
-                    </span>
-                  )}
-                  {activeProject.venue_name && (
-                    <span style={{
-                      marginLeft: 12,
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: 4,
-                      background: 'rgba(16, 185, 129, 0.1)',
-                      color: '#10b981',
-                      padding: '2px 8px',
-                      borderRadius: 12,
-                      fontSize: 11,
-                      fontWeight: 700
-                    }}>
-                      <MapPin size={12} /> Địa điểm: {activeProject.venue_name}
-                    </span>
-                  )}
-                </div>
-                
-                <div className="proj-roles-bar">
-                  <span className="proj-role-item">👤 <strong>Chủ trì (Owner):</strong> {activeProject.owner_name || 'Chưa phân công'}</span>
-                  <span className="proj-role-item">👥 <strong>Phó chủ trì:</strong> {activeProject.sub_owner_name || 'Không có'}</span>
-                  {activeProject.members && activeProject.members.length > 0 && (
-                    <span className="proj-role-item">👥 <strong>Nhân sự tham gia:</strong> {activeProject.members.map(m => m.name).join(', ')}</span>
-                  )}
-                </div>
+                  <span>{activeProject.start_date || 'N/A'} → {activeProject.end_date || 'N/A'}</span>
+                </span>
 
-                {activeProject.departments && activeProject.departments.length > 0 && (
-                  <div className="proj-dept-tags">
-                    {activeProject.departments.map(d => (
-                      <span key={d.department_id} className="proj-dept-tag">{translateDept(d.name)}</span>
-                    ))}
+                {/* Khởi tạo bởi */}
+                {activeProject.creator_name && (
+                  <span className="proj-role-item" style={{ background: '#f8fafc', color: '#475569' }}>
+                    <span>Khởi tạo: <strong>{activeProject.creator_name}</strong></span>
+                  </span>
+                )}
+
+                {/* Nhân sự phụ trách */}
+                <span className="proj-role-item">
+                  👤 <strong>Chủ trì (Owner):</strong> {activeProject.owner_name || 'Chưa phân công'}
+                </span>
+
+                <span className="proj-role-item">
+                  👥 <strong>Phó chủ trì:</strong> {activeProject.sub_owner_name || 'Không có'}
+                </span>
+
+                {activeProject.members && activeProject.members.length > 0 && (
+                  <span className="proj-role-item" title={activeProject.members.map(m => m.name).join(', ')}>
+                    👥 <strong>Tham gia ({activeProject.members.length}):</strong> {activeProject.members.map(m => m.name).join(', ')}
+                  </span>
+                )}
+
+                {/* CRM Deal / SĐT khách */}
+                {activeProject.customer_phone && (
+                  <span className="proj-role-item" style={{ background: 'rgba(79, 70, 229, 0.08)', color: '#4f46e5', borderColor: 'rgba(79, 70, 229, 0.2)' }}>
+                    💼 CRM Deal #{activeProject.crm_deal_id} (Hotline: {activeProject.customer_phone})
+                  </span>
+                )}
+
+                {/* Địa điểm Onsite */}
+                {activeProject.venue_name && (
+                  <span className="proj-role-item" style={{ background: 'rgba(16, 185, 129, 0.08)', color: '#10b981', borderColor: 'rgba(16, 185, 129, 0.2)' }}>
+                    <MapPin size={12} /> {activeProject.venue_name}
+                  </span>
+                )}
+              </div>
+
+              {/* HÀNG 3: MÔ TẢ DỰ ÁN GỌN GÀNG (EXPANDABLE COMPACT STRIP) */}
+              {activeProject.description && activeProject.description.trim() && (
+                <div className="proj-desc-box">
+                  <div style={{
+                    display: '-webkit-box',
+                    WebkitLineClamp: isDescExpanded ? 'unset' : 2,
+                    WebkitBoxOrient: 'vertical',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis'
+                  }}>
+                    <strong style={{ color: 'var(--text-primary)' }}>Mô tả: </strong>
+                    {activeProject.description}
                   </div>
-                )}
-              </div>
-
-              <div className="proj-action-btns">
-                <button 
-                  className="btn-outline" 
-                  style={{ color: showProgressSection ? 'var(--accent-orange)' : 'var(--text-secondary)' }}
-                  onClick={() => setShowProgressSection(!showProgressSection)}
-                  title="Xem ma trận tiến độ phòng ban"
-                >
-                  <BarChart2 size={14} /> Tiến độ phòng ban {showProgressSection ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
-                </button>
-
-                <button 
-                  className="btn-outline" 
-                  style={{ color: showProjectDiscussion ? '#4f46e5' : 'var(--text-secondary)', borderColor: showProjectDiscussion ? '#4f46e5' : 'var(--border-color)' }}
-                  onClick={() => setShowProjectDiscussion(!showProjectDiscussion)}
-                  title="Thảo luận & Trao đổi trong dự án"
-                >
-                  <MessageSquare size={14} /> Thảo luận {showProjectDiscussion ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
-                </button>
-
-                {(user?.role === 'Admin' || activeProject.created_by === user?.id || activeProject.owner_id === user?.id || activeProject.sub_owner_id === user?.id) && (
-                  <button className="btn-outline" onClick={() => openEditProjectModal(activeProject)}>
-                    <Settings size={14} /> Thiết lập
-                  </button>
-                )}
-                <button className="btn-neon" onClick={() => openAddTaskModal(null)}>
-                  <Plus size={14} /> Tạo Công Việc
-                </button>
-                {(user?.role === 'Admin' || activeProject.created_by === user?.id) && (
-                  <button className="btn-outline" style={{ borderColor: '#fca5a5', color: '#ef4444', padding: '0 8px' }} onClick={() => handleDeleteProject(activeProject.id)} title="Xóa dự án (Chỉ người tạo hoặc Admin)">
-                    <Trash2 size={14} />
-                  </button>
-                )}
-              </div>
+                  {activeProject.description.length > 120 && (
+                    <button
+                      onClick={() => setIsDescExpanded(!isDescExpanded)}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        color: '#4f46e5',
+                        fontSize: 11.5,
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        padding: '3px 0 0 0',
+                        display: 'inline-block'
+                      }}
+                    >
+                      {isDescExpanded ? 'Thu gọn ▲' : 'Xem chi tiết mô tả ▼'}
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* KHU VỰC THẢO LUẬN DỰ ÁN */}
@@ -1277,40 +1325,40 @@ export const ProjectView: React.FC<ProjectViewProps> = ({ onOpenLiveEvent }) => 
                 background: '#ffffff', 
                 border: '1px solid var(--border-color)', 
                 borderRadius: 10, 
-                padding: '16px 20px', 
-                marginBottom: 24,
+                padding: '12px 18px', 
+                marginBottom: 16,
                 boxShadow: '0 2px 6px rgba(0,0,0,0.03)'
               }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <BarChart2 size={18} style={{ color: 'var(--accent-orange)' }} />
-                    <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>
+                    <BarChart2 size={16} style={{ color: 'var(--accent-orange)' }} />
+                    <span style={{ fontSize: 13.5, fontWeight: 700, color: 'var(--text-primary)' }}>
                       Ma Trận Tiến Độ Dự Án — Phòng Ban & Ban Quản Trị
                     </span>
                   </div>
-                  <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+                  <span style={{ fontSize: 11.5, color: 'var(--text-secondary)' }}>
                     Cập nhật thời gian thực
                   </span>
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 14 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 10 }}>
                   {/* Thẻ Toàn Dự Án (Ban Quản Trị) */}
                   <div style={{ 
                     background: 'linear-gradient(135deg, rgba(79, 70, 229, 0.08), rgba(6, 182, 212, 0.08))', 
                     border: '1px solid rgba(79, 70, 229, 0.25)', 
                     borderRadius: 8, 
-                    padding: 12 
+                    padding: '9px 12px' 
                   }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                      <span style={{ fontSize: 13, fontWeight: 700, color: '#4f46e5' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                      <span style={{ fontSize: 12.5, fontWeight: 700, color: '#4f46e5' }}>
                         👑 Ban Quản Trị (Tổng thể)
                       </span>
-                      <span style={{ fontSize: 14, fontWeight: 800, color: '#4f46e5' }}>
+                      <span style={{ fontSize: 13.5, fontWeight: 800, color: '#4f46e5' }}>
                         {progressMatrix.overall.percent}%
                       </span>
                     </div>
 
-                    <div style={{ height: 6, background: '#e2e8f0', borderRadius: 3, overflow: 'hidden', marginBottom: 8 }}>
+                    <div style={{ height: 5, background: '#e2e8f0', borderRadius: 3, overflow: 'hidden', marginBottom: 6 }}>
                       <div style={{ height: '100%', width: `${progressMatrix.overall.percent}%`, background: 'linear-gradient(90deg, #4f46e5, #06b6d4)' }} />
                     </div>
 
@@ -1324,7 +1372,7 @@ export const ProjectView: React.FC<ProjectViewProps> = ({ onOpenLiveEvent }) => 
 
                   {/* Thẻ từng phòng ban */}
                   {progressMatrix.departments.length === 0 ? (
-                    <div style={{ padding: 12, fontSize: 12, color: 'var(--text-muted)', display: 'flex', alignItems: 'center' }}>
+                    <div style={{ padding: 10, fontSize: 12, color: 'var(--text-muted)', display: 'flex', alignItems: 'center' }}>
                       Chưa có công việc nào phân bổ cho phòng ban.
                     </div>
                   ) : (
@@ -1335,11 +1383,11 @@ export const ProjectView: React.FC<ProjectViewProps> = ({ onOpenLiveEvent }) => 
                           background: '#f8fafc', 
                           border: '1px solid var(--border-color)', 
                           borderRadius: 8, 
-                          padding: 12 
+                          padding: '9px 12px' 
                         }}
                       >
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                          <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                          <span style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--text-primary)' }}>
                             🏢 {translateDept(dept.department_name)}
                           </span>
                           <span style={{ fontSize: 13, fontWeight: 700, color: dept.percent === 100 ? '#16a34a' : 'var(--text-primary)' }}>
@@ -1347,7 +1395,7 @@ export const ProjectView: React.FC<ProjectViewProps> = ({ onOpenLiveEvent }) => 
                           </span>
                         </div>
 
-                        <div style={{ height: 5, background: '#e2e8f0', borderRadius: 3, overflow: 'hidden', marginBottom: 8 }}>
+                        <div style={{ height: 4, background: '#e2e8f0', borderRadius: 2, overflow: 'hidden', marginBottom: 6 }}>
                           <div style={{ height: '100%', width: `${dept.percent}%`, background: dept.percent === 100 ? '#16a34a' : '#3b82f6' }} />
                         </div>
 
