@@ -19,23 +19,35 @@ module.exports = (app, ctx) => {
   const { dbAll, dbGet, dbRun, authenticateToken, helpers, createNotification } = ctx;
   const { canAccessProject, canManageProject } = helpers;
 
+  // In-memory cache cho kịch bản theo từng dự án (giúp polling Live Show 4s/lần tốn 0 truy vấn DB khi chưa bấm GO)
+  const cuesCache = new Map();
+
   const listCues = (projectId) => dbAll(
     `SELECT * FROM event_cues WHERE project_id = ? ORDER BY cue_order ASC, id ASC`,
     [projectId]
   );
 
-  const respondCues = async (res, projectId) => {
-    const cues = await listCues(projectId);
+  const respondCues = async (res, projectId, forceRefresh = true) => {
+    const pid = Number(projectId);
+    if (!forceRefresh && cuesCache.has(pid)) {
+      return res.json({ cues: cuesCache.get(pid), server_time: new Date().toISOString() });
+    }
+    const cues = await listCues(pid);
+    cuesCache.set(pid, cues);
     res.json({ cues, server_time: new Date().toISOString() });
   };
 
   // Lấy toàn bộ kịch bản (dùng cho polling Live Show, kèm server_time để client bù lệch đồng hồ)
   app.get('/api/projects/:id/cues', authenticateToken, async (req, res) => {
     try {
-      if (!(await canAccessProject(req.user, req.params.id))) {
+      const pid = Number(req.params.id);
+      if (cuesCache.has(pid)) {
+        return respondCues(res, pid, false);
+      }
+      if (!(await canAccessProject(req.user, pid))) {
         return res.status(403).json({ error: 'Bạn không có quyền xem kịch bản dự án này' });
       }
-      await respondCues(res, req.params.id);
+      await respondCues(res, pid, true);
     } catch (err) { res.status(500).json({ error: err.message }); }
   });
 
@@ -176,6 +188,7 @@ module.exports = (app, ctx) => {
          VALUES (?, 'STAGE', ?, ?, ?, 'cue_call', ?)`,
         [projectId, req.user.id, req.user.name || 'Đạo diễn', req.user.role, text]
       );
+      if (helpers.invalidateCommsCache) helpers.invalidateCommsCache(projectId);
 
       // Thông báo cho PIC của cue standby để chuẩn bị
       if (next && next.pic_id && next.pic_id !== req.user.id && createNotification) {

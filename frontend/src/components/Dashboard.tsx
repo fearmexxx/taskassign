@@ -14,7 +14,8 @@ import {
   Navigation,
   RefreshCw,
   X,
-  Smartphone
+  Smartphone,
+  Sparkles
 } from 'lucide-react';
 import { NotificationBell } from './NotificationBell';
 
@@ -29,6 +30,9 @@ interface Task {
   description: string;
   project_id: number;
   assignee_id: number;
+  owner_id?: number | null;
+  sub_owner_id?: number | null;
+  members?: { user_id: number; name: string }[];
   status: 'Todo' | 'InProgress' | 'Review' | 'Done';
   priority: 'Low' | 'Medium' | 'High';
   due_date: string;
@@ -331,12 +335,50 @@ export const Dashboard: React.FC<DashboardProps> = ({ onCheckInChange, setActive
     }
   };
 
-  const myPendingTasks = tasks.filter(t => t.assignee_id === user?.id && t.status !== 'Done');
-  const myTasksCount = tasks.filter(t => t.assignee_id === user?.id).length;
-  const myCompletedCount = tasks.filter(t => t.assignee_id === user?.id && t.status === 'Done').length;
+  const isMyTask = (t: Task) => {
+    if (!user) return false;
+    return (
+      t.owner_id === user.id ||
+      t.sub_owner_id === user.id ||
+      t.assignee_id === user.id ||
+      (t.members && t.members.some(m => m.user_id === user.id))
+    );
+  };
+
+  const myAllTasks = tasks.filter(isMyTask);
+  const myPendingTasks = myAllTasks.filter(t => t.status !== 'Done');
+  const myTasksCount = myAllTasks.length;
+  const myCompletedCount = myAllTasks.filter(t => t.status === 'Done').length;
   
   const todayStr = new Date().toISOString().split('T')[0];
-  const overdueTasksCount = tasks.filter(t => t.assignee_id === user?.id && t.status !== 'Done' && t.due_date < todayStr).length;
+  const overdueTasksCount = myPendingTasks.filter(t => t.due_date && t.due_date < todayStr).length;
+
+  const handleAutoFillReport = () => {
+    const doneTasks = myAllTasks.filter(t => t.status === 'Done');
+    const inProgressTasks = myAllTasks.filter(t => t.status === 'InProgress' || t.status === 'Review');
+    const todoTasks = myAllTasks.filter(t => t.status === 'Todo');
+
+    const lines: string[] = [
+      `📅 BÁO CÁO CÔNG VIỆC NGÀY ${new Date().toLocaleDateString('vi-VN')}:`,
+      '',
+      `✅ Đã hoàn thành (${doneTasks.length} việc):`,
+      ...(doneTasks.length > 0
+        ? doneTasks.slice(0, 8).map(t => `- [${t.project_name || 'Dự án'}] ${t.title}`)
+        : ['- (Chưa có đầu việc đánh dấu hoàn thành)']),
+      '',
+      `🔄 Đang triển khai & Chờ duyệt (${inProgressTasks.length} việc):`,
+      ...(inProgressTasks.length > 0
+        ? inProgressTasks.slice(0, 8).map(t => `- [${t.project_name || 'Dự án'}] ${t.title} (Hạn: ${t.due_date || 'N/A'})`)
+        : ['- (Không có)']),
+      '',
+      `📋 Kế hoạch tiếp theo (${todoTasks.length} việc chờ làm):`,
+      ...(todoTasks.length > 0
+        ? todoTasks.slice(0, 5).map(t => `- [${t.project_name || 'Dự án'}] ${t.title} (Hạn: ${t.due_date || 'N/A'})`)
+        : ['- Tiếp tục theo dõi tiến độ dự án được phân công.'])
+    ];
+
+    setReportText(lines.join('\n'));
+  };
 
   const translateStatus = (status: string) => {
     const statuses: Record<string, string> = {
@@ -925,9 +967,31 @@ export const Dashboard: React.FC<DashboardProps> = ({ onCheckInChange, setActive
 
             {/* BÁO CÁO CÔNG VIỆC CUỐI NGÀY */}
             <form onSubmit={handleSubmitReport} className="report-form">
-              <h4 style={{ fontSize: 14, fontWeight: 600, marginBottom: 8 }}>Báo cáo công việc hàng ngày (EOD)</h4>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, gap: 8, flexWrap: 'wrap' }}>
+                <h4 style={{ fontSize: 14, fontWeight: 600, margin: 0 }}>Báo cáo công việc hàng ngày (EOD)</h4>
+                <button
+                  type="button"
+                  onClick={handleAutoFillReport}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 5,
+                    padding: '4px 10px',
+                    fontSize: 11.5,
+                    fontWeight: 700,
+                    borderRadius: 6,
+                    border: '1px solid #c084fc',
+                    background: 'rgba(168, 85, 247, 0.08)',
+                    color: '#7e22ce',
+                    cursor: 'pointer'
+                  }}
+                  title="Tự động điền báo cáo từ danh sách công việc đã làm và đang làm hôm nay"
+                >
+                  <Sparkles size={13} /> Tự động tổng hợp từ Task
+                </button>
+              </div>
               <textarea
-                placeholder="Nhập nội dung công việc, đầu việc đã thực hiện hoặc ghi chú khó khăn hôm nay..."
+                placeholder="Nhập nội dung công việc, đầu việc đã thực hiện hoặc bấm 'Tự động tổng hợp từ Task'..."
                 value={reportText}
                 onChange={e => setReportText(e.target.value)}
               />

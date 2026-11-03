@@ -7,6 +7,14 @@ const num = (v) => {
 };
 
 const createHelpers = ({ dbGet, dbAll }) => {
+  // Bộ nhớ đệm quyền truy cập dự án (TTL 60s) và tin nhắn bộ đàm để tránh đánh thức Neon DB khi polling
+  const accessCache = new Map(); // key: `${userId}:${projectId}` -> { allowed, exp }
+  const commsCache = new Map();  // key: String(projectId || 'global') -> Array<message>
+
+  const invalidateCommsCache = (projectId) => {
+    commsCache.delete(String(projectId || 'global'));
+  };
+
   // Kiểm tra user có thuộc phòng Sales & Account không
   const isSalesAccount = async (user) => {
     if (!user || !user.department_id) return false;
@@ -18,22 +26,32 @@ const createHelpers = ({ dbGet, dbAll }) => {
   const canAccessProject = async (user, projectId) => {
     if (!user) return false;
     if (user.role === 'Admin') return true;
-    const p = await dbGet(`SELECT id, owner_id, sub_owner_id, created_by FROM projects WHERE id = ?`, [projectId]);
-    if (!p) return false;
-    if ([p.owner_id, p.sub_owner_id, p.created_by].includes(user.id)) return true;
-    const member = await dbGet(`SELECT user_id FROM project_members WHERE project_id = ? AND user_id = ?`, [projectId, user.id]);
-    if (member) return true;
-    const assigned = await dbGet(
-      `SELECT t.id FROM tasks t LEFT JOIN task_members tm ON tm.task_id = t.id
-       WHERE t.project_id = ? AND (t.assignee_id = ? OR t.owner_id = ? OR t.sub_owner_id = ? OR tm.user_id = ?)`,
-      [projectId, user.id, user.id, user.id, user.id]
-    );
-    if (assigned) return true;
-    if (user.role === 'Lead' && user.department_id) {
-      const dep = await dbGet(`SELECT project_id FROM project_departments WHERE project_id = ? AND department_id = ?`, [projectId, user.department_id]);
-      if (dep) return true;
-    }
-    return false;
+    const cacheKey = `${user.id}:${projectId}`;
+    const cached = accessCache.get(cacheKey);
+    if (cached && cached.exp > Date.now()) return cached.allowed;
+
+    const compute = async () => {
+      const p = await dbGet(`SELECT id, owner_id, sub_owner_id, created_by FROM projects WHERE id = ?`, [projectId]);
+      if (!p) return false;
+      if ([p.owner_id, p.sub_owner_id, p.created_by].includes(user.id)) return true;
+      const member = await dbGet(`SELECT user_id FROM project_members WHERE project_id = ? AND user_id = ?`, [projectId, user.id]);
+      if (member) return true;
+      const assigned = await dbGet(
+        `SELECT t.id FROM tasks t LEFT JOIN task_members tm ON tm.task_id = t.id
+         WHERE t.project_id = ? AND (t.assignee_id = ? OR t.owner_id = ? OR t.sub_owner_id = ? OR tm.user_id = ?)`,
+        [projectId, user.id, user.id, user.id, user.id]
+      );
+      if (assigned) return true;
+      if (user.role === 'Lead' && user.department_id) {
+        const dep = await dbGet(`SELECT project_id FROM project_departments WHERE project_id = ? AND department_id = ?`, [projectId, user.department_id]);
+        if (dep) return true;
+      }
+      return false;
+    };
+
+    const allowed = await compute();
+    accessCache.set(cacheKey, { allowed, exp: Date.now() + 60_000 });
+    return allowed;
   };
 
   // Quyền QUẢN LÝ dự án (sửa kịch bản, điều khiển Live Show): Admin, người tạo, chủ trì, phó chủ trì, hoặc Lead có quyền xem
@@ -65,7 +83,7 @@ const createHelpers = ({ dbGet, dbAll }) => {
     return [...ids];
   };
 
-  return { isSalesAccount, canAccessProject, canManageProject, canAccessBudget, getProjectUserIds };
+  return { isSalesAccount, canAccessProject, canManageProject, canAccessBudget, getProjectUserIds, commsCache, invalidateCommsCache };
 };
 
 module.exports = { num, createHelpers };

@@ -134,20 +134,28 @@ module.exports = (app, ctx) => {
   });
 
   // ================= BỘ ĐÀM / VOICE COMMS (Push-to-Talk qua polling) =================
-  // Lấy tin nhắn mới theo since_id (client polling 2s). project_id rỗng = kênh chung toàn công ty
+  // Lấy tin nhắn mới theo since_id (client polling). Dùng commsCache trên RAM để tránh đánh thức Neon DB khi không có tin mới.
   app.get('/api/comms/messages', authenticateToken, async (req, res) => {
     try {
       const projectId = req.query.project_id ? Number(req.query.project_id) : null;
       const sinceId = Number(req.query.since_id) || 0;
       if (projectId && !(await canAccessProject(req.user, projectId))) return res.status(403).json({ error: 'Không có quyền vào kênh bộ đàm dự án này' });
 
-      const rows = await dbAll(
-        `SELECT * FROM voice_comms_messages
-         WHERE ${projectId ? 'project_id = ?' : 'project_id IS NULL'} AND id > ?
-         ORDER BY id DESC LIMIT 60`,
-        projectId ? [projectId, sinceId] : [sinceId]
-      );
-      res.json({ messages: rows.reverse().map(m => ({ ...m, duration_sec: num(m.duration_sec) })), server_time: new Date().toISOString() });
+      const cacheKey = String(projectId || 'global');
+      let allRecent = helpers.commsCache ? helpers.commsCache.get(cacheKey) : null;
+      if (!allRecent) {
+        const rows = await dbAll(
+          `SELECT * FROM voice_comms_messages
+           WHERE ${projectId ? 'project_id = ?' : 'project_id IS NULL'}
+           ORDER BY id DESC LIMIT 60`,
+          projectId ? [projectId] : []
+        );
+        allRecent = rows.reverse().map(m => ({ ...m, duration_sec: num(m.duration_sec) }));
+        if (helpers.commsCache) helpers.commsCache.set(cacheKey, allRecent);
+      }
+
+      const filtered = sinceId > 0 ? allRecent.filter(m => Number(m.id) > sinceId) : allRecent;
+      res.json({ messages: filtered, server_time: new Date().toISOString() });
     } catch (err) { res.status(500).json({ error: err.message }); }
   });
 
@@ -179,6 +187,8 @@ module.exports = (app, ctx) => {
       // Dọn dữ liệu cũ: chỉ giữ 500 tin gần nhất để DB gọn nhẹ
       const newId = Number(result.lastID) || 0;
       if (newId > 500 && newId % 50 === 0) await dbRun(`DELETE FROM voice_comms_messages WHERE id < ?`, [newId - 500]);
+
+      if (helpers.invalidateCommsCache) helpers.invalidateCommsCache(projectId);
 
       res.status(201).json({ id: newId });
     } catch (err) { res.status(500).json({ error: err.message }); }

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { FileText, Calendar, Filter, User } from 'lucide-react';
+import { FileText, Calendar, Filter, User, Sparkles, Send, CheckCircle } from 'lucide-react';
 
 interface Report {
   id: number;
@@ -23,6 +23,76 @@ export const WorkReports: React.FC = () => {
   const [reports, setReports] = useState<Report[]>([]);
   const [team, setTeam] = useState<TeamMember[]>([]);
   const [selectedUser, setSelectedUser] = useState<string>('');
+  const [reportContent, setReportContent] = useState<string>('');
+  const [submitting, setSubmitting] = useState(false);
+  const [autoFilling, setAutoFilling] = useState(false);
+  const [submitSuccess, setSubmitSuccess] = useState(false);
+
+  const handleAutoGenerateReport = async () => {
+    if (!user) return;
+    setAutoFilling(true);
+    try {
+      const res = await fetchWithAuth('/api/tasks');
+      if (res.ok) {
+        const allTasks: any[] = await res.json();
+        const myTasks = allTasks.filter(t =>
+          t.owner_id === user.id ||
+          t.sub_owner_id === user.id ||
+          t.assignee_id === user.id ||
+          (t.members && t.members.some((m: any) => m.user_id === user.id))
+        );
+        const doneTasks = myTasks.filter(t => t.status === 'Done');
+        const inProgressTasks = myTasks.filter(t => t.status === 'InProgress' || t.status === 'Review');
+        const todoTasks = myTasks.filter(t => t.status === 'Todo');
+
+        const lines: string[] = [
+          `📅 BÁO CÁO CÔNG VIỆC NGÀY ${new Date().toLocaleDateString('vi-VN')}:`,
+          '',
+          `✅ Đã hoàn thành (${doneTasks.length} việc):`,
+          ...(doneTasks.length > 0
+            ? doneTasks.slice(0, 10).map(t => `- [${t.project_name || 'Dự án'}] ${t.title}`)
+            : ['- (Chưa có đầu việc đánh dấu hoàn thành)']),
+          '',
+          `🔄 Đang triển khai & Chờ duyệt (${inProgressTasks.length} việc):`,
+          ...(inProgressTasks.length > 0
+            ? inProgressTasks.slice(0, 10).map(t => `- [${t.project_name || 'Dự án'}] ${t.title} (Hạn: ${t.due_date || 'N/A'})`)
+            : ['- (Không có)']),
+          '',
+          `📋 Kế hoạch tiếp theo (${todoTasks.length} việc chờ làm):`,
+          ...(todoTasks.length > 0
+            ? todoTasks.slice(0, 6).map(t => `- [${t.project_name || 'Dự án'}] ${t.title} (Hạn: ${t.due_date || 'N/A'})`)
+            : ['- Tiếp tục theo dõi tiến độ dự án được phân công.'])
+        ];
+        setReportContent(lines.join('\n'));
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setAutoFilling(false);
+    }
+  };
+
+  const handleSubmitNewReport = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!reportContent.trim()) return;
+    setSubmitting(true);
+    try {
+      const res = await fetchWithAuth('/api/reports', {
+        method: 'POST',
+        body: JSON.stringify({ content: reportContent })
+      });
+      if (res.ok) {
+        setReportContent('');
+        setSubmitSuccess(true);
+        setTimeout(() => setSubmitSuccess(false), 3000);
+        loadReports();
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   const loadReports = async () => {
     try {
@@ -184,6 +254,83 @@ export const WorkReports: React.FC = () => {
           <p style={{ color: 'var(--text-secondary)', fontSize: 14 }}>Xem báo cáo tiến độ hoạt động ngày và ghi chú công việc của toàn agency</p>
         </div>
       </div>
+
+      {/* KHUNG VIẾT & TỰ ĐỘNG TỔNG HỢP BÁO CÁO NGÀY (1-CLICK EOD REPORT) */}
+      <form
+        onSubmit={handleSubmitNewReport}
+        className="glass-panel"
+        style={{
+          background: '#ffffff',
+          border: '1px solid var(--border-color)',
+          borderRadius: 10,
+          padding: '16px 20px',
+          marginBottom: 24
+        }}
+      >
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, flexWrap: 'wrap', gap: 8 }}>
+          <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' }}>
+            ✍️ Gửi Báo Cáo Công Việc Hôm Nay ({new Date().toLocaleDateString('vi-VN')})
+          </div>
+          <button
+            type="button"
+            onClick={handleAutoGenerateReport}
+            disabled={autoFilling}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 6,
+              padding: '6px 12px',
+              borderRadius: 8,
+              border: '1px solid #c084fc',
+              background: 'rgba(168, 85, 247, 0.08)',
+              color: '#7e22ce',
+              fontSize: 12.5,
+              fontWeight: 700,
+              cursor: autoFilling ? 'wait' : 'pointer'
+            }}
+          >
+            <Sparkles size={14} />
+            <span>{autoFilling ? 'Đang tổng hợp...' : '✨ Tự động tổng hợp việc hôm nay'}</span>
+          </button>
+        </div>
+
+        <textarea
+          rows={5}
+          placeholder="Bấm nút '✨ Tự động tổng hợp việc hôm nay' để hệ thống tự lấy các Task bạn đã hoàn thành & đang làm, hoặc nhập ghi chú bổ sung tại đây..."
+          value={reportContent}
+          onChange={e => setReportContent(e.target.value)}
+          style={{
+            width: '100%',
+            padding: 12,
+            borderRadius: 8,
+            border: '1px solid var(--border-color)',
+            fontSize: 13.5,
+            fontFamily: 'var(--font-family)',
+            lineHeight: 1.5,
+            marginBottom: 10,
+            resize: 'vertical'
+          }}
+        />
+
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div>
+            {submitSuccess && (
+              <span style={{ color: '#16a34a', fontSize: 13, fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                <CheckCircle size={15} /> Đã lưu báo cáo cuối ngày thành công!
+              </span>
+            )}
+          </div>
+          <button
+            type="submit"
+            disabled={submitting || !reportContent.trim()}
+            className="btn-neon"
+            style={{ padding: '8px 18px', display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13 }}
+          >
+            <Send size={14} />
+            <span>{submitting ? 'Đang gửi...' : 'Gửi Báo Cáo EOD'}</span>
+          </button>
+        </div>
+      </form>
 
       {/* THANH LỌC BÁO CÁO CHO ADMIN/LEADS */}
       {(user?.role === 'Admin' || user?.role === 'Lead') && (

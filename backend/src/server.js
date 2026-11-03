@@ -101,13 +101,20 @@ const dbRun = (sql, params = []) => new Promise((resolve, reject) => {
  * @param {number|null} referenceId   - ID task hoặc project liên quan
  * @param {string|null} referenceType - 'task' | 'project'
  */
+// In-memory cache cho số lượng thông báo chưa đọc của từng user (giúp polling không đánh thức Neon DB)
+const unreadCountCache = new Map();
+
 const createNotification = async (userId, type, title, message, referenceId = null, referenceType = null) => {
   try {
+    const uid = Number(userId);
     await dbRun(
       `INSERT INTO notifications (user_id, type, title, message, is_read, reference_id, reference_type, created_at)
        VALUES (?, ?, ?, ?, 0, ?, ?, CURRENT_TIMESTAMP)`,
-      [userId, type, title, message, referenceId, referenceType]
+      [uid, type, title, message, referenceId, referenceType]
     );
+    if (unreadCountCache.has(uid)) {
+      unreadCountCache.set(uid, unreadCountCache.get(uid) + 1);
+    }
   } catch (err) {
     console.error(`[Notification] Failed to create notification for user ${userId}:`, err.message);
   }
@@ -441,23 +448,26 @@ app.get('/api/projects', authenticateToken, async (req, res) => {
 
     const projects = await dbAll(query, params);
 
-    // Fetch members and departments for each project
-    for (let proj of projects) {
-      proj.members = await dbAll(
-        `SELECT pm.user_id, u.name, u.role 
-         FROM project_members pm
-         JOIN users u ON pm.user_id = u.id
-         WHERE pm.project_id = ?`,
-        [proj.id]
-      );
-
-      proj.departments = await dbAll(
-        `SELECT pd.department_id, d.name 
-         FROM project_departments pd
-         JOIN departments d ON pd.department_id = d.id
-         WHERE pd.project_id = ?`,
-        [proj.id]
-      );
+    // Batch fetch members and departments for all projects in 2 queries (eliminating N+1 query storm)
+    if (projects.length > 0) {
+      const [allMembers, allDepts] = await Promise.all([
+        dbAll(`SELECT pm.project_id, pm.user_id, u.name, u.role FROM project_members pm JOIN users u ON pm.user_id = u.id`),
+        dbAll(`SELECT pd.project_id, pd.department_id, d.name FROM project_departments pd JOIN departments d ON pd.department_id = d.id`)
+      ]);
+      const membersByProj = new Map();
+      for (const m of allMembers || []) {
+        if (!membersByProj.has(m.project_id)) membersByProj.set(m.project_id, []);
+        membersByProj.get(m.project_id).push({ user_id: m.user_id, name: m.name, role: m.role });
+      }
+      const deptsByProj = new Map();
+      for (const d of allDepts || []) {
+        if (!deptsByProj.has(d.project_id)) deptsByProj.set(d.project_id, []);
+        deptsByProj.get(d.project_id).push({ department_id: d.department_id, name: d.name });
+      }
+      for (const proj of projects) {
+        proj.members = membersByProj.get(proj.id) || [];
+        proj.departments = deptsByProj.get(proj.id) || [];
+      }
     }
 
     res.json(projects);
@@ -715,8 +725,12 @@ app.get('/api/admin/project-deletion-logs', authenticateToken, requireRole(['Adm
 // --- TASK MANAGEMENT ---
 app.get('/api/tasks', authenticateToken, async (req, res) => {
   try {
+    // Tối ưu hóa băng thông Neon: Không SELECT trực tiếp cột t.attachments (chứa chuỗi Base64 lên tới 5MB/tệp)
+    // Chỉ kiểm tra cờ has_attachments, và chỉ tải nội dung Base64 khi user bấm mở xem/sửa đúng task đó!
     let query = `
-      SELECT t.*, 
+      SELECT t.id, t.title, t.description, t.details, t.created_by, t.project_id,
+             t.assignee_id, t.status, t.priority, t.due_date, t.owner_id, t.sub_owner_id, t.parent_id,
+             CASE WHEN t.attachments IS NOT NULL AND LENGTH(t.attachments) > 5 THEN 1 ELSE 0 END as has_attachments,
              u.name as assignee_name, 
              p.name as project_name,
              u1.name as owner_name,
@@ -793,27 +807,143 @@ app.get('/api/tasks', authenticateToken, async (req, res) => {
 
     const tasks = await dbAll(query, params);
 
-    for (let task of tasks) {
-      task.members = await dbAll(
-        `SELECT tm.user_id, u.name 
-         FROM task_members tm
-         JOIN users u ON tm.user_id = u.id
-         WHERE tm.task_id = ?`,
-        [task.id]
-      );
-
-      task.departments = await dbAll(
-        `SELECT td.department_id, d.name 
-         FROM task_departments td
-         JOIN departments d ON td.department_id = d.id
-         WHERE td.task_id = ?`,
-        [task.id]
-      );
+    // Batch fetch task_members and task_departments in 2 queries instead of 2*N queries
+    if (tasks.length > 0) {
+      const [allTaskMembers, allTaskDepts] = await Promise.all([
+        dbAll(`SELECT tm.task_id, tm.user_id, u.name FROM task_members tm JOIN users u ON tm.user_id = u.id`),
+        dbAll(`SELECT td.task_id, td.department_id, d.name FROM task_departments td JOIN departments d ON td.department_id = d.id`)
+      ]);
+      const membersByTask = new Map();
+      for (const m of allTaskMembers || []) {
+        if (!membersByTask.has(m.task_id)) membersByTask.set(m.task_id, []);
+        membersByTask.get(m.task_id).push({ user_id: m.user_id, name: m.name });
+      }
+      const deptsByTask = new Map();
+      for (const d of allTaskDepts || []) {
+        if (!deptsByTask.has(d.task_id)) deptsByTask.set(d.task_id, []);
+        deptsByTask.get(d.task_id).push({ department_id: d.department_id, name: d.name });
+      }
+      for (const task of tasks) {
+        task.members = membersByTask.get(task.id) || [];
+        task.departments = deptsByTask.get(task.id) || [];
+        task.attachments = Number(task.has_attachments) === 1
+          ? JSON.stringify([{ name: 'Tệp đính kèm', size: 0, type: '', data: '', _lazy: true }])
+          : '[]';
+      }
     }
 
     res.json(tasks);
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+// Lazy-load full Base64 attachments for a single task on demand
+app.get('/api/tasks/:id/attachments', authenticateToken, async (req, res) => {
+  try {
+    const row = await dbGet(`SELECT attachments FROM tasks WHERE id = ?`, [req.params.id]);
+    if (!row) return res.status(404).json({ error: 'Không tìm thấy công việc' });
+    res.json({ attachments: row.attachments || '[]' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Bộ mẫu Checklist Công Việc chuẩn theo loại sự kiện Agency
+const EVENT_TASK_TEMPLATES = {
+  product_launch: [
+    { title: 'Nhận Brief chi tiết, thống nhất Concept & Ký hợp đồng dịch vụ', details: 'Làm rõ KPI sự kiện, đối tượng khách mời VIP/Media và tiến độ nghiệm thu.', priority: 'High', dept_keyword: 'Sales', offset_days: 2 },
+    { title: 'Thiết kế bộ nhận diện Key Visual, Backdrop, Standee & Thư mời', details: 'Thiết kế KV chủ đạo và adapt ra các hạng mục POSM sự kiện.', priority: 'High', dept_keyword: 'Design', offset_days: 4 },
+    { title: 'Dựng phối cảnh 3D Sân khấu, Khu vực Check-in & Booth trưng bày', details: 'Render 3D góc nhìn tổng thể và chi tiết kích thước kỹ thuật để báo giá thi công.', priority: 'High', dept_keyword: 'Design', offset_days: 5 },
+    { title: 'Lên Media Plan, Booking KOLs/Báo chí & Chuẩn bị Thông cáo báo chí', details: 'Chốt danh sách khách mời báo chí, KOLs tham dự và bài PR sau sự kiện.', priority: 'Medium', dept_keyword: 'Media', offset_days: 6 },
+    { title: 'Chốt Nhà cung cấp (Âm thanh, Ánh sáng, Màn LED, Tiệc Teabreak)', details: 'Gửi PO, đặt cọc NCC và cập nhật vào bảng Dự toán P&L & Hậu cần.', priority: 'High', dept_keyword: 'Sales', offset_days: 7 },
+    { title: 'Xuất file in ấn POSM, sản xuất hạng mục thi công & quà tặng', details: 'Kiểm tra kỹ hệ màu CMYK, kích thước tràn lề trước khi chuyển xưởng in.', priority: 'Medium', dept_keyword: 'Design', offset_days: 8 },
+    { title: 'Tổng duyệt kỹ thuật (Rehearsal), khớp kịch bản Cue Sheet & Chạy sự kiện', details: 'Test toàn bộ mic, visual LED, ánh sáng và chạy thử kịch bản trên phân hệ Live Event.', priority: 'High', dept_keyword: 'Media', offset_days: 10 },
+    { title: 'Dựng Video Highlight Recap & Hoàn thiện Báo cáo nghiệm thu thanh toán', details: 'Bàn giao hình ảnh/video sự kiện và hồ sơ thanh lý hợp đồng cho khách hàng.', priority: 'Medium', dept_keyword: 'Media', offset_days: 12 }
+  ],
+  livestream: [
+    { title: 'Thống nhất kịch bản Deal giá, Danh mục sản phẩm & KPI phiên Live', details: 'Chốt danh sách mã giảm giá, quà tặng minigame và mục tiêu mắt xem (PCU).', priority: 'High', dept_keyword: 'Sales', offset_days: 1 },
+    { title: 'Thiết kế Khung hình (Overlay Frame), Banner đếm ngược & Thẻ giá Flash Sale', details: 'Đảm bảo hiển thị rõ nét trên cả giao diện dọc (TikTok/Shopee) và ngang (Facebook/YouTube).', priority: 'High', dept_keyword: 'Design', offset_days: 3 },
+    { title: 'Booking Host/MC/KOC & Lên kịch bản tung hứng theo từng khung giờ', details: 'Phân bổ thời lượng giới thiệu từng sản phẩm và điểm rơi tung deal.', priority: 'High', dept_keyword: 'Media', offset_days: 3 },
+    { title: 'Setup Studio, Ánh sáng, Đường truyền Internet & Cấu hình OBS/Camera', details: 'Kiểm tra đường truyền mạng dự phòng, thu âm micro không dây và góc máy cận sản phẩm.', priority: 'High', dept_keyword: 'Media', offset_days: 4 },
+    { title: 'Chạy Rehearsal thử tải & Vận hành điều phối phiên Livestream chính thức', details: 'Ghim sản phẩm đúng nhịp Host nói, theo dõi bình luận và điều phối cue.', priority: 'High', dept_keyword: 'Media', offset_days: 5 },
+    { title: 'Tổng hợp chỉ số mắt xem, Doanh thu (GMV) & Báo cáo nghiệm thu', details: 'Xuất dữ liệu analytics và gửi báo cáo tổng kết cho nhãn hàng.', priority: 'Medium', dept_keyword: 'Sales', offset_days: 6 }
+  ],
+  activation: [
+    { title: 'Khảo sát địa điểm (Venue Survey), Xin giấy phép & Thuê mặt bằng', details: 'Đo đạc kích thước thực tế, vị trí nguồn điện và thủ tục ban quản lý tòa nhà/TTTM.', priority: 'High', dept_keyword: 'Sales', offset_days: 2 },
+    { title: 'Thiết kế 3D Booth Activation, Khu vực Minigame & Quà tặng Sampling', details: 'Tối ưu luồng di chuyển khách tham quan (Traffic Flow) và điểm thu hút check-in.', priority: 'High', dept_keyword: 'Design', offset_days: 4 },
+    { title: 'Tuyển dụng, Training đội ngũ PG/PB & Chuẩn bị đồng phục', details: 'Chọn CTV từ danh bạ Freelancer, đào tạo kỹ năng tư vấn sản phẩm và quy tắc tác phong.', priority: 'Medium', dept_keyword: 'Sales', offset_days: 5 },
+    { title: 'Thi công lắp đặt Booth tại điểm (Setup đêm) & Nghiệm thu an toàn', details: 'Giám sát lắp đặt khung truss, backdrop, quầy kệ và hệ thống đèn chiếu sáng.', priority: 'High', dept_keyword: 'Design', offset_days: 7 },
+    { title: 'Vận hành hoạt động trải nghiệm khách hàng & Quay chụp phóng sự', details: 'Ghi hình tư liệu khách hàng trải nghiệm và điều phối phát quà sampling.', priority: 'Medium', dept_keyword: 'Media', offset_days: 8 },
+    { title: 'Tháo dỡ hoàn trả mặt bằng, Kiểm kê quà tồn & Báo cáo lưu lượng khách', details: 'Cập nhật danh sách thiết bị hoàn kho trên Packing List và báo cáo kết quả.', priority: 'Medium', dept_keyword: 'Sales', offset_days: 9 }
+  ],
+  gala_dinner: [
+    { title: 'Đề xuất Concept chủ đề đêm tiệc, Ngân sách dự kiến & Chốt sảnh nhà hàng', details: 'Thống nhất thực đơn bàn tiệc, sơ đồ bàn VIP và kịch bản tổng thể.', priority: 'High', dept_keyword: 'Sales', offset_days: 2 },
+    { title: 'Thiết kế Key Visual, Photobooth chụp hình, Sân khấu & Bảng tên bàn tiệc', details: 'Đồng bộ nhận diện thương hiệu trên toàn bộ ấn phẩm đêm tiệc.', priority: 'High', dept_keyword: 'Design', offset_days: 5 },
+    { title: 'Sản xuất Video nhìn lại hành trình năm & Visual LED từng tiết mục', details: 'Dựng clip Year in Review và visual hiệu ứng cho lễ vinh danh cá nhân xuất sắc.', priority: 'High', dept_keyword: 'Media', offset_days: 7 },
+    { title: 'Booking MC, Ca sĩ/Vũ đoàn, Quà tặng Vinh danh, Cúp & Lucky Draw', details: 'Kiểm tra danh sách khắc tên cúp vinh danh và quà bốc thăm trúng thưởng.', priority: 'High', dept_keyword: 'Sales', offset_days: 7 },
+    { title: 'Tổng duyệt sân khấu, Âm thanh Ánh sáng & Điều hành đêm Gala', details: 'Điều phối theo Run of Show và bộ đàm nội bộ giữa MC, Âm thanh, Ánh sáng, Lễ tân.', priority: 'High', dept_keyword: 'Media', offset_days: 10 }
+  ]
+};
+
+app.post('/api/projects/:id/task-template', authenticateToken, async (req, res) => {
+  const projectId = Number(req.params.id);
+  const { template_key } = req.body || {};
+  const templateItems = EVENT_TASK_TEMPLATES[template_key];
+  if (!templateItems) {
+    return res.status(400).json({ error: 'Mẫu công việc không hợp lệ' });
+  }
+
+  try {
+    const project = await dbGet(`SELECT * FROM projects WHERE id = ?`, [projectId]);
+    if (!project) return res.status(404).json({ error: 'Không tìm thấy dự án' });
+
+    const allDepts = await dbAll(`SELECT id, name FROM departments`);
+    const baseDate = project.start_date ? new Date(project.start_date) : new Date();
+    const defaultOwnerId = project.owner_id || req.user.id;
+    let createdCount = 0;
+
+    for (const item of templateItems) {
+      const due = new Date(baseDate.getTime() + (item.offset_days || 3) * 86400000);
+      const dueDateStr = due.toISOString().split('T')[0];
+
+      // Match department by keyword
+      const matchedDept = (allDepts || []).find(d =>
+        d.name && d.name.toLowerCase().includes(item.dept_keyword.toLowerCase())
+      );
+
+      const result = await dbRun(
+        `INSERT INTO tasks (title, description, details, attachments, created_by, project_id, assignee_id, status, priority, due_date, owner_id, sub_owner_id, parent_id)
+         VALUES (?, ?, ?, NULL, ?, ?, ?, 'Todo', ?, ?, ?, ?, NULL)`,
+        [
+          item.title,
+          item.details,
+          item.details,
+          req.user.id,
+          projectId,
+          defaultOwnerId,
+          item.priority || 'Medium',
+          dueDateStr,
+          defaultOwnerId,
+          project.sub_owner_id || null
+        ]
+      );
+
+      const newTaskId = result.lastID;
+      if (newTaskId) {
+        await dbRun(`INSERT INTO task_members (task_id, user_id) VALUES (?, ?) ON CONFLICT DO NOTHING`, [newTaskId, defaultOwnerId]);
+        if (matchedDept) {
+          await dbRun(`INSERT INTO task_departments (task_id, department_id) VALUES (?, ?) ON CONFLICT DO NOTHING`, [newTaskId, matchedDept.id]);
+          await dbRun(`INSERT INTO project_departments (project_id, department_id) VALUES (?, ?) ON CONFLICT DO NOTHING`, [projectId, matchedDept.id]);
+        }
+        createdCount++;
+      }
+    }
+
+    res.status(201).json({ message: `Đã tạo thành công ${createdCount} đầu việc chuẩn cho dự án`, count: createdCount });
+  } catch (err) {
+    console.error('Error applying task template:', err);
+    res.status(500).json({ error: err.message || 'Lỗi khi nạp mẫu công việc' });
   }
 });
 
@@ -940,9 +1070,14 @@ app.put('/api/tasks/:id', authenticateToken, async (req, res) => {
     const currentTask = await dbGet(`SELECT * FROM tasks WHERE id = ?`, [taskId]);
     if (!currentTask) return res.status(404).json({ error: 'Không tìm thấy công việc' });
 
-    const rawAttachments = attachments !== undefined 
-      ? (typeof attachments === 'string' ? attachments : JSON.stringify(attachments)) 
-      : currentTask.attachments;
+    let rawAttachments = currentTask.attachments;
+    if (attachments !== undefined) {
+      const parsed = typeof attachments === 'string' ? (() => { try { return JSON.parse(attachments); } catch { return []; } })() : attachments;
+      const isLazyPlaceholder = Array.isArray(parsed) && parsed.length === 1 && parsed[0] && parsed[0]._lazy;
+      if (!isLazyPlaceholder) {
+        rawAttachments = typeof attachments === 'string' ? attachments : JSON.stringify(attachments);
+      }
+    }
 
     await dbRun(
       `UPDATE tasks 
@@ -1891,14 +2026,20 @@ app.get('/api/notifications', authenticateToken, async (req, res) => {
   }
 });
 
-// GET /api/notifications/unread-count - Số lượng thông báo chưa đọc
+// GET /api/notifications/unread-count - Số lượng thông báo chưa đọc (Served from RAM cache để tiết kiệm Neon CU-hrs)
 app.get('/api/notifications/unread-count', authenticateToken, async (req, res) => {
   try {
+    const uid = Number(req.user.id);
+    if (unreadCountCache.has(uid)) {
+      return res.json({ count: unreadCountCache.get(uid) });
+    }
     const row = await dbGet(
       `SELECT COUNT(*) as count FROM notifications WHERE user_id = ? AND is_read = 0`,
-      [req.user.id]
+      [uid]
     );
-    res.json({ count: row ? (row.count || 0) : 0 });
+    const count = row ? (Number(row.count) || 0) : 0;
+    unreadCountCache.set(uid, count);
+    res.json({ count });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -1907,10 +2048,12 @@ app.get('/api/notifications/unread-count', authenticateToken, async (req, res) =
 // PUT /api/notifications/:id/read - Đánh dấu 1 thông báo đã đọc
 app.put('/api/notifications/:id/read', authenticateToken, async (req, res) => {
   try {
+    const uid = Number(req.user.id);
     await dbRun(
       `UPDATE notifications SET is_read = 1 WHERE id = ? AND user_id = ?`,
-      [req.params.id, req.user.id]
+      [req.params.id, uid]
     );
+    unreadCountCache.delete(uid);
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -1920,10 +2063,12 @@ app.put('/api/notifications/:id/read', authenticateToken, async (req, res) => {
 // PUT /api/notifications/read-all - Đánh dấu tất cả thông báo đã đọc
 app.put('/api/notifications/read-all', authenticateToken, async (req, res) => {
   try {
+    const uid = Number(req.user.id);
     await dbRun(
       `UPDATE notifications SET is_read = 1 WHERE user_id = ?`,
-      [req.user.id]
+      [uid]
     );
+    unreadCountCache.set(uid, 0);
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: err.message });

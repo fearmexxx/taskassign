@@ -19,11 +19,20 @@ interface NotificationBellProps {
   placement?: 'left' | 'right' | 'center';
 }
 
-const POLL_INTERVAL_MS = 30_000;
+const POLL_INTERVAL_MS = 60_000;
+
+// Đồng bộ trạng thái giữa nhiều instance NotificationBell (Sidebar Desktop & Header Mobile) để tránh nhân đôi request
+let globalLastFetchAt = 0;
+let globalUnreadCount = 0;
+const unreadSubscribers = new Set<(count: number) => void>();
+const notifyUnreadSubscribers = (count: number) => {
+  globalUnreadCount = count;
+  unreadSubscribers.forEach(cb => cb(count));
+};
 
 export const NotificationBell: React.FC<NotificationBellProps> = ({ onNavigate, placement = 'center' }) => {
   const { fetchWithAuth } = useAuth();
-  const [unreadCount, setUnreadCount] = useState(0);
+  const [unreadCount, setUnreadCount] = useState(globalUnreadCount);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -72,7 +81,17 @@ export const NotificationBell: React.FC<NotificationBellProps> = ({ onNavigate, 
     }
   };
 
-  const fetchUnreadCount = useCallback(async () => {
+  const fetchUnreadCount = useCallback(async (force = false) => {
+    // Tạm dừng polling khi tab trình duyệt đang bị ẩn (tiết kiệm tài nguyên Neon DB & cho phép Scale-to-Zero)
+    if (typeof document !== 'undefined' && document.visibilityState !== 'visible') {
+      return;
+    }
+    const now = Date.now();
+    if (!force && now - globalLastFetchAt < 10_000) {
+      return;
+    }
+    globalLastFetchAt = now;
+
     try {
       const res = await fetchWithAuth('/api/notifications/unread-count');
       if (res.ok) {
@@ -96,7 +115,7 @@ export const NotificationBell: React.FC<NotificationBellProps> = ({ onNavigate, 
         }
         
         lastKnownCountRef.current = newCount;
-        setUnreadCount(newCount);
+        notifyUnreadSubscribers(newCount);
       }
     } catch {
       // Silent fail
@@ -119,9 +138,22 @@ export const NotificationBell: React.FC<NotificationBellProps> = ({ onNavigate, 
   }, [fetchWithAuth]);
 
   useEffect(() => {
+    unreadSubscribers.add(setUnreadCount);
     fetchUnreadCount();
-    pollRef.current = setInterval(fetchUnreadCount, POLL_INTERVAL_MS);
-    return () => { if (pollRef.current) clearInterval(pollRef.current); };
+    pollRef.current = setInterval(() => fetchUnreadCount(false), POLL_INTERVAL_MS);
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        fetchUnreadCount(false);
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      unreadSubscribers.delete(setUnreadCount);
+      if (pollRef.current) clearInterval(pollRef.current);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
   }, [fetchUnreadCount]);
 
   useEffect(() => {
@@ -145,7 +177,7 @@ export const NotificationBell: React.FC<NotificationBellProps> = ({ onNavigate, 
         setNotifications(prev =>
           prev.map(n => n.id === notification.id ? { ...n, is_read: 1 } : n)
         );
-        setUnreadCount(prev => Math.max(0, prev - 1));
+        notifyUnreadSubscribers(Math.max(0, globalUnreadCount - 1));
       } catch {
         // Silent fail
       }
@@ -160,7 +192,7 @@ export const NotificationBell: React.FC<NotificationBellProps> = ({ onNavigate, 
     try {
       await fetchWithAuth('/api/notifications/read-all', { method: 'PUT' });
       setNotifications(prev => prev.map(n => ({ ...n, is_read: 1 })));
-      setUnreadCount(0);
+      notifyUnreadSubscribers(0);
     } catch {
       // Silent fail
     }

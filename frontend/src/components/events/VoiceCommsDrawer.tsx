@@ -35,14 +35,37 @@ export const VoiceCommsDrawer: React.FC<VoiceCommsDrawerProps> = ({ projectId, p
   const audioChunksRef = useRef<Blob[]>([]);
   const recordTimerRef = useRef<any>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const lastMessageIdRef = useRef<number>(0);
 
-  const loadMessages = async () => {
+  const loadMessages = async (reset = false) => {
+    // Tạm dừng polling khi tab trình duyệt đang bị ẩn để tiết kiệm băng thông & Neon DB
+    if (!reset && typeof document !== 'undefined' && document.visibilityState !== 'visible') {
+      return;
+    }
     try {
-      const q = projectId ? `?project_id=${projectId}` : '';
+      const sinceId = reset ? 0 : lastMessageIdRef.current;
+      const params = new URLSearchParams();
+      if (projectId) params.set('project_id', String(projectId));
+      if (sinceId > 0) params.set('since_id', String(sinceId));
+      const q = params.toString() ? `?${params.toString()}` : '';
+
       const res = await fetchWithAuth(`/api/comms/messages${q}`);
       if (res.ok) {
         const data = await res.json();
-        setMessages(data.messages || []);
+        const incoming: VoiceCommsMessage[] = data.messages || [];
+        if (reset) {
+          setMessages(incoming);
+          lastMessageIdRef.current = incoming.length > 0 ? Math.max(...incoming.map(m => Number(m.id) || 0)) : 0;
+        } else if (incoming.length > 0) {
+          setMessages(prev => {
+            const existingIds = new Set(prev.map(m => m.id));
+            const newOnes = incoming.filter(m => !existingIds.has(m.id));
+            if (newOnes.length === 0) return prev;
+            const merged = [...prev, ...newOnes].slice(-80);
+            lastMessageIdRef.current = Math.max(lastMessageIdRef.current, ...newOnes.map(m => Number(m.id) || 0));
+            return merged;
+          });
+        }
       }
     } catch (err) {
       console.error(err);
@@ -50,8 +73,9 @@ export const VoiceCommsDrawer: React.FC<VoiceCommsDrawerProps> = ({ projectId, p
   };
 
   useEffect(() => {
-    loadMessages();
-    const interval = setInterval(loadMessages, 3000);
+    lastMessageIdRef.current = 0;
+    loadMessages(true);
+    const interval = setInterval(() => loadMessages(false), 3000);
     return () => clearInterval(interval);
   }, [projectId]);
 

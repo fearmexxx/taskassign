@@ -52,7 +52,10 @@ export const EventRunOfShow: React.FC<EventRunOfShowProps> = ({ projectId, proje
     pic_name: ''
   });
 
-  const loadCues = async () => {
+  const loadCues = async (isPoll = false) => {
+    if (isPoll && typeof document !== 'undefined' && document.visibilityState !== 'visible') {
+      return;
+    }
     try {
       const res = await fetchWithAuth(`/api/projects/${projectId}/cues`);
       if (res.ok) {
@@ -67,9 +70,9 @@ export const EventRunOfShow: React.FC<EventRunOfShowProps> = ({ projectId, proje
   };
 
   useEffect(() => {
-    loadCues();
+    loadCues(false);
     // Polling nhẹ mỗi 4s để đồng bộ trạng thái Live Cue khi có người bấm GO
-    const interval = setInterval(loadCues, 4000);
+    const interval = setInterval(() => loadCues(true), 4000);
     return () => clearInterval(interval);
   }, [projectId]);
 

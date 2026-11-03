@@ -30,7 +30,9 @@ import {
   Radio,
   Box,
   DollarSign,
-  MapPin
+  MapPin,
+  Sparkles,
+  Flame
 } from 'lucide-react';
 import { DiscussionSection } from './DiscussionSection';
 import { EventLogistics } from './events/EventLogistics';
@@ -175,6 +177,7 @@ export const ProjectView: React.FC<ProjectViewProps> = ({ onOpenLiveEvent }) => 
   const [showEditProject, setShowEditProject] = useState(false);
   const [newProjectName, setNewProjectName] = useState('');
   const [newProjectDesc, setNewProjectDesc] = useState('');
+  const [newProjectStatus, setNewProjectStatus] = useState<'Planning' | 'Active' | 'Completed' | 'OnHold'>('Active');
   const [newProjectStart, setNewProjectStart] = useState('');
   const [newProjectEnd, setNewProjectEnd] = useState('');
   const [newProjectOwner, setNewProjectOwner] = useState<number>(0);
@@ -186,6 +189,14 @@ export const ProjectView: React.FC<ProjectViewProps> = ({ onOpenLiveEvent }) => 
   const [newProjectVenueLat, setNewProjectVenueLat] = useState<string>('');
   const [newProjectVenueLng, setNewProjectVenueLng] = useState<string>('');
   const [newProjectVenueRadius, setNewProjectVenueRadius] = useState<number>(300);
+
+  // Chế độ "Việc Của Tôi" (My Daily Workspace) & Bộ lọc trạng thái dự án
+  const [isMyTasksMode, setIsMyTasksMode] = useState(false);
+  const [projectStatusFilter, setProjectStatusFilter] = useState<'ACTIVE' | 'COMPLETED' | 'ALL'>('ACTIVE');
+
+  // Modal nạp Checklist Mẫu cho sự kiện
+  const [showTemplateModal, setShowTemplateModal] = useState(false);
+  const [applyingTemplate, setApplyingTemplate] = useState(false);
 
   // Event Suite View Sub-tab: 'tasks' | 'cues' | 'logistics' | 'budget'
   const [projectSubTab, setProjectSubTab] = useState<'tasks' | 'logistics' | 'budget'>('tasks');
@@ -276,6 +287,7 @@ export const ProjectView: React.FC<ProjectViewProps> = ({ onOpenLiveEvent }) => 
   const openEditProjectModal = (proj: Project) => {
     setNewProjectName(proj.name);
     setNewProjectDesc(proj.description);
+    setNewProjectStatus(proj.status || 'Active');
     setNewProjectStart(proj.start_date);
     setNewProjectEnd(proj.end_date);
     setNewProjectOwner(proj.owner_id || 0);
@@ -352,6 +364,7 @@ export const ProjectView: React.FC<ProjectViewProps> = ({ onOpenLiveEvent }) => 
         body: JSON.stringify({
           name: newProjectName,
           description: newProjectDesc,
+          status: newProjectStatus,
           start_date: newProjectStart,
           end_date: newProjectEnd,
           owner_id: newProjectOwner || null,
@@ -383,6 +396,7 @@ export const ProjectView: React.FC<ProjectViewProps> = ({ onOpenLiveEvent }) => 
   const resetProjectForm = () => {
     setNewProjectName('');
     setNewProjectDesc('');
+    setNewProjectStatus('Active');
     setNewProjectStart('');
     setNewProjectEnd('');
     setNewProjectOwner(user?.id || team[0]?.id || 0);
@@ -481,12 +495,39 @@ export const ProjectView: React.FC<ProjectViewProps> = ({ onOpenLiveEvent }) => 
     }
   };
 
+  // Lazy load tệp đính kèm Base64 chỉ khi người dùng mở chi tiết hoặc sửa công việc (tiết kiệm 95% băng thông Neon DB)
+  const ensureTaskAttachments = async (t: Task): Promise<TaskAttachment[]> => {
+    const current = parseAttachments(t.attachments);
+    if (current.some((a: any) => a && a._lazy)) {
+      try {
+        const res = await fetchWithAuth(`/api/tasks/${t.id}/attachments`);
+        if (res.ok) {
+          const data = await res.json();
+          const fullAttachments = parseAttachments(data.attachments);
+          setTasks(prev => prev.map(item => item.id === t.id ? { ...item, attachments: fullAttachments } : item));
+          setViewingTask(prev => prev && prev.id === t.id ? { ...prev, attachments: fullAttachments } : prev);
+          return fullAttachments;
+        }
+      } catch (err) {
+        console.error('Lỗi tải tệp đính kèm:', err);
+      }
+      return [];
+    }
+    return current;
+  };
+
+  const handleViewTask = (t: Task) => {
+    setViewingTask(t);
+    ensureTaskAttachments(t);
+  };
+
   const openEditTaskModal = (t: Task) => {
     setEditingTaskId(t.id);
     setTaskTitle(t.title);
     setTaskDesc(t.description || '');
     setTaskDetails(t.details || '');
-    setTaskAttachments(parseAttachments(t.attachments));
+    const initialAtts = parseAttachments(t.attachments);
+    setTaskAttachments(initialAtts.filter((a: any) => !a._lazy));
     setTaskPriority(t.priority || 'Medium');
     setTaskStatus(t.status || 'Todo');
     setTaskDueDate(t.due_date || '');
@@ -496,6 +537,36 @@ export const ProjectView: React.FC<ProjectViewProps> = ({ onOpenLiveEvent }) => 
     setSelectedTaskDepts(t.departments?.map(d => d.department_id) || []);
     setTaskParentId(t.parent_id || null);
     setShowTaskModal(true);
+
+    if (initialAtts.some((a: any) => a && a._lazy)) {
+      ensureTaskAttachments(t).then(full => setTaskAttachments(full));
+    }
+  };
+
+  const handleApplyTaskTemplate = async (templateKey: string) => {
+    if (!selectedProjectId) return;
+    setApplyingTemplate(true);
+    try {
+      const res = await fetchWithAuth(`/api/projects/${selectedProjectId}/task-template`, {
+        method: 'POST',
+        body: JSON.stringify({ template_key: templateKey })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setShowTemplateModal(false);
+        await loadData(selectedProjectId);
+        await loadProgressMatrix(selectedProjectId);
+        alert(`✨ ${data.message || 'Đã nạp bộ công việc mẫu thành công!'}`);
+      } else {
+        const err = await res.json().catch(() => ({}));
+        alert(err.error || 'Không thể nạp mẫu công việc.');
+      }
+    } catch (e: any) {
+      console.error(e);
+      alert(e.message || 'Lỗi kết nối khi nạp mẫu công việc.');
+    } finally {
+      setApplyingTemplate(false);
+    }
   };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -652,6 +723,33 @@ export const ProjectView: React.FC<ProjectViewProps> = ({ onOpenLiveEvent }) => 
 
   const activeProject = projects.find(p => p.id === selectedProjectId);
   const projectTasks = tasks.filter(t => t.project_id === selectedProjectId);
+
+  // Danh sách công việc thuộc trách nhiệm của user hiện tại trên TẤT CẢ dự án
+  const todayIso = new Date().toISOString().split('T')[0];
+  const myTasks = tasks.filter(t => {
+    if (!user) return false;
+    return (
+      t.owner_id === user.id ||
+      t.sub_owner_id === user.id ||
+      t.assignee_id === user.id ||
+      (t.members && t.members.some(m => m.user_id === user.id))
+    );
+  });
+  const myPendingTasks = myTasks.filter(t => t.status !== 'Done');
+  const myOverdueTasks = myPendingTasks.filter(t => t.due_date && t.due_date < todayIso);
+  const myTodayOrActiveTasks = myPendingTasks.filter(t => (!t.due_date || t.due_date >= todayIso) && (t.status === 'InProgress' || t.status === 'Review' || t.due_date === todayIso));
+  const myUpcomingTasks = myPendingTasks.filter(t => !myOverdueTasks.includes(t) && !myTodayOrActiveTasks.includes(t));
+  const myCompletedTasks = myTasks.filter(t => t.status === 'Done');
+
+  // Phân loại dự án theo trạng thái để lọc gọn sidebar
+  const activeProjectsList = projects.filter(p => p.status !== 'Completed');
+  const completedProjectsList = projects.filter(p => p.status === 'Completed');
+  const filteredProjects =
+    projectStatusFilter === 'ACTIVE'
+      ? activeProjectsList
+      : projectStatusFilter === 'COMPLETED'
+      ? completedProjectsList
+      : projects;
 
   // Lấy các task chính (không có parent_id)
   const mainTasks = projectTasks.filter(t => !t.parent_id);
@@ -1140,10 +1238,84 @@ export const ProjectView: React.FC<ProjectViewProps> = ({ onOpenLiveEvent }) => 
           </div>
         </div>
 
+        {/* NÚT CHẾ ĐỘ "VIỆC CỦA TÔI" — GOM TOÀN BỘ VIỆC TRÊN MỌI DỰ ÁN */}
+        <button
+          onClick={() => setIsMyTasksMode(true)}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            width: '100%',
+            padding: '10px 14px',
+            borderRadius: 10,
+            border: isMyTasksMode ? '2px solid #f97316' : '1px solid #fed7aa',
+            background: isMyTasksMode
+              ? 'linear-gradient(135deg, #fff7ed, #ffedd5)'
+              : '#ffffff',
+            color: '#c2410c',
+            fontWeight: 700,
+            fontSize: 13,
+            cursor: 'pointer',
+            boxShadow: isMyTasksMode ? '0 4px 12px rgba(249, 115, 22, 0.15)' : '0 1px 2px rgba(0,0,0,0.03)',
+            transition: 'all 0.2s ease'
+          }}
+        >
+          <span style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+            <Flame size={16} color="#ea580c" />
+            <span>Việc Của Tôi Hôm Nay</span>
+          </span>
+          <span style={{
+            background: myOverdueTasks.length > 0 ? '#ef4444' : '#f97316',
+            color: '#ffffff',
+            fontSize: 11,
+            fontWeight: 800,
+            padding: '2px 8px',
+            borderRadius: 999
+          }}>
+            {myPendingTasks.length} việc
+          </span>
+        </button>
+
+        {/* BỘ LỌC TRẠNG THÁI DỰ ÁN (ĐANG CHẠY / ĐÃ XONG / TẤT CẢ) */}
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: '1fr 1fr 1fr',
+          gap: 4,
+          background: '#e2e8f0',
+          padding: 3,
+          borderRadius: 8
+        }}>
+          {[
+            { key: 'ACTIVE', label: `Đang chạy (${activeProjectsList.length})` },
+            { key: 'COMPLETED', label: `Đã xong (${completedProjectsList.length})` },
+            { key: 'ALL', label: `Tất cả (${projects.length})` }
+          ].map(tab => (
+            <button
+              key={tab.key}
+              type="button"
+              onClick={() => setProjectStatusFilter(tab.key as any)}
+              style={{
+                border: 'none',
+                borderRadius: 6,
+                padding: '5px 4px',
+                fontSize: 11,
+                fontWeight: projectStatusFilter === tab.key ? 700 : 500,
+                background: projectStatusFilter === tab.key ? '#ffffff' : 'transparent',
+                color: projectStatusFilter === tab.key ? '#4f46e5' : '#64748b',
+                cursor: 'pointer',
+                boxShadow: projectStatusFilter === tab.key ? '0 1px 2px rgba(0,0,0,0.06)' : 'none',
+                whiteSpace: 'nowrap'
+              }}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
         <div className="project-list">
-          {projects.length === 0 ? (
+          {filteredProjects.length === 0 ? (
             <div style={{ padding: '24px 12px', textAlign: 'center', color: 'var(--text-secondary)', fontSize: 13 }}>
-              <p>Chưa có dự án nào</p>
+              <p>Không có dự án trong mục này</p>
               <button 
                 onClick={openAddProjectModal} 
                 style={{ marginTop: 8, background: 'none', border: 'none', color: 'var(--accent-orange)', cursor: 'pointer', fontWeight: 600, fontSize: 13, textDecoration: 'underline' }}
@@ -1152,15 +1324,25 @@ export const ProjectView: React.FC<ProjectViewProps> = ({ onOpenLiveEvent }) => 
               </button>
             </div>
           ) : (
-            projects.map(proj => {
+            filteredProjects.map(proj => {
               const completion = proj.total_tasks > 0 ? Math.round((proj.completed_tasks / proj.total_tasks) * 100) : 0;
               return (
                 <div 
                   key={proj.id} 
-                  className={`project-item ${selectedProjectId === proj.id ? 'active' : ''}`}
-                  onClick={() => setSelectedProjectId(proj.id)}
+                  className={`project-item ${!isMyTasksMode && selectedProjectId === proj.id ? 'active' : ''}`}
+                  onClick={() => {
+                    setIsMyTasksMode(false);
+                    setSelectedProjectId(proj.id);
+                  }}
                 >
-                  <div className="project-item-name">{proj.name}</div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 6 }}>
+                    <div className="project-item-name">{proj.name}</div>
+                    {proj.status === 'Completed' && (
+                      <span style={{ fontSize: 10, background: '#dcfce7', color: '#15803d', padding: '1px 6px', borderRadius: 4, fontWeight: 700, flexShrink: 0 }}>
+                        Xong
+                      </span>
+                    )}
+                  </div>
                   <div className="project-progress-bar">
                     <div className="project-progress-fill" style={{ width: `${completion}%` }} />
                   </div>
@@ -1175,9 +1357,163 @@ export const ProjectView: React.FC<ProjectViewProps> = ({ onOpenLiveEvent }) => 
         </div>
       </div>
 
-      {/* CHI TIẾT DỰ ÁN */}
+      {/* CHI TIẾT DỰ ÁN HOẶC KHÔNG GIAN VIỆC CỦA TÔI */}
       <div className="project-details-area">
-        {activeProject ? (
+        {isMyTasksMode ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+            {/* HEADER KHÔNG GIAN VIỆC CỦA TÔI */}
+            <div style={{
+              background: 'linear-gradient(135deg, #fff7ed, #ffffff)',
+              border: '1px solid #fed7aa',
+              borderRadius: 12,
+              padding: '16px 20px',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              flexWrap: 'wrap',
+              gap: 12
+            }}>
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <Flame size={22} color="#ea580c" />
+                  <h1 style={{ margin: 0, fontSize: 20, fontWeight: 800, color: '#0f172a' }}>
+                    Việc Của Tôi Hôm Nay — Tất Cả Dự Án
+                  </h1>
+                </div>
+                <p style={{ margin: '4px 0 0 0', fontSize: 13, color: '#64748b' }}>
+                  Tổng hợp toàn bộ công việc bạn làm Chủ trì (PIC), Phó chủ trì hoặc Thành viên tham gia trên mọi dự án đang chạy
+                </p>
+              </div>
+
+              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, padding: '6px 12px', textAlign: 'center' }}>
+                  <div style={{ fontSize: 11, color: '#dc2626', fontWeight: 700 }}>🚨 Quá hạn</div>
+                  <div style={{ fontSize: 18, fontWeight: 800, color: '#b91c1c' }}>{myOverdueTasks.length}</div>
+                </div>
+                <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 8, padding: '6px 12px', textAlign: 'center' }}>
+                  <div style={{ fontSize: 11, color: '#2563eb', fontWeight: 700 }}>⚡ Hôm nay / Đang chạy</div>
+                  <div style={{ fontSize: 18, fontWeight: 800, color: '#1d4ed8' }}>{myTodayOrActiveTasks.length}</div>
+                </div>
+                <div style={{ background: '#f8fafc', border: '1px solid #cbd5e1', borderRadius: 8, padding: '6px 12px', textAlign: 'center' }}>
+                  <div style={{ fontSize: 11, color: '#475569', fontWeight: 700 }}>📅 Sắp tới</div>
+                  <div style={{ fontSize: 18, fontWeight: 800, color: '#334155' }}>{myUpcomingTasks.length}</div>
+                </div>
+                <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 8, padding: '6px 12px', textAlign: 'center' }}>
+                  <div style={{ fontSize: 11, color: '#16a34a', fontWeight: 700 }}>✅ Đã xong</div>
+                  <div style={{ fontSize: 18, fontWeight: 800, color: '#15803d' }}>{myCompletedTasks.length}</div>
+                </div>
+              </div>
+            </div>
+
+            {[
+              { title: '🚨 Quá hạn — Cần xử lý ngay', items: myOverdueTasks, color: '#dc2626', bg: '#fef2f2', border: '#fecaca' },
+              { title: '⚡ Cần làm hôm nay & Đang thực hiện', items: myTodayOrActiveTasks, color: '#2563eb', bg: '#eff6ff', border: '#bfdbfe' },
+              { title: '📅 Công việc sắp tới (Todo)', items: myUpcomingTasks, color: '#475569', bg: '#f8fafc', border: '#e2e8f0' },
+              { title: '✅ Đã hoàn thành gần đây', items: myCompletedTasks.slice(0, 15), color: '#16a34a', bg: '#f0fdf4', border: '#bbf7d0' }
+            ].map(section => (
+              <div key={section.title} style={{ background: '#ffffff', border: `1px solid ${section.border}`, borderRadius: 10, padding: '14px 16px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                  <span style={{ fontSize: 14, fontWeight: 800, color: section.color }}>{section.title}</span>
+                  <span style={{ fontSize: 12, fontWeight: 700, background: section.bg, color: section.color, padding: '2px 8px', borderRadius: 999 }}>
+                    {section.items.length} việc
+                  </span>
+                </div>
+
+                {section.items.length === 0 ? (
+                  <div style={{ fontSize: 12.5, color: '#94a3b8', fontStyle: 'italic', padding: '6px 0' }}>
+                    Không có công việc nào trong nhóm này.
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {section.items.map(t => (
+                      <div
+                        key={t.id}
+                        onClick={() => handleViewTask(t)}
+                        style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          gap: 12,
+                          padding: '10px 12px',
+                          borderRadius: 8,
+                          border: '1px solid #e2e8f0',
+                          background: '#f8fafc',
+                          cursor: 'pointer',
+                          flexWrap: 'wrap'
+                        }}
+                      >
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 4, flex: 1, minWidth: 220 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                            <span
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setIsMyTasksMode(false);
+                                setSelectedProjectId(t.project_id);
+                              }}
+                              style={{
+                                fontSize: 11,
+                                fontWeight: 700,
+                                background: 'rgba(79, 70, 229, 0.1)',
+                                color: '#4f46e5',
+                                padding: '2px 8px',
+                                borderRadius: 4,
+                                cursor: 'pointer'
+                              }}
+                              title="Bấm để mở dự án này"
+                            >
+                              📁 {t.project_name || `Dự án #${t.project_id}`}
+                            </span>
+                            <span style={{ fontSize: 14, fontWeight: 700, color: t.status === 'Done' ? '#94a3b8' : '#0f172a', textDecoration: t.status === 'Done' ? 'line-through' : 'none' }}>
+                              {t.title}
+                            </span>
+                          </div>
+                          {t.description && (
+                            <div style={{ fontSize: 12, color: '#64748b' }}>{t.description}</div>
+                          )}
+                        </div>
+
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }} onClick={e => e.stopPropagation()}>
+                          <span style={{ fontSize: 11.5, color: t.due_date && t.due_date < todayIso && t.status !== 'Done' ? '#dc2626' : '#64748b', fontWeight: 600 }}>
+                            📅 Hạn: {t.due_date || 'Không có'}
+                          </span>
+                          <span className={`priority-${t.priority}`} style={{ fontSize: 11, textTransform: 'uppercase' }}>
+                            {translatePriority(t.priority)}
+                          </span>
+                          {t.status !== 'InProgress' && t.status !== 'Done' && (
+                            <button
+                              className="btn-outline"
+                              style={{ padding: '4px 8px', fontSize: 11, color: '#0284c7', borderColor: '#bae6fd' }}
+                              onClick={() => handleUpdateTaskStatus(t.id, 'InProgress')}
+                            >
+                              ▶ Nhận làm
+                            </button>
+                          )}
+                          {t.status !== 'Done' ? (
+                            <button
+                              className="btn-outline"
+                              style={{ padding: '4px 10px', fontSize: 11, background: '#dcfce7', color: '#15803d', borderColor: '#86efac', fontWeight: 700 }}
+                              onClick={() => handleUpdateTaskStatus(t.id, 'Done')}
+                            >
+                              ✓ Hoàn thành
+                            </button>
+                          ) : (
+                            <button
+                              className="btn-outline"
+                              style={{ padding: '4px 8px', fontSize: 11 }}
+                              onClick={() => handleUpdateTaskStatus(t.id, 'InProgress')}
+                            >
+                              Mở lại
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        ) : activeProject ? (
           <>
             <div className="details-header">
               {/* HÀNG 1: TÊN DỰ ÁN + PHÒNG BAN PHỤ TRÁCH & NÚT THAO TÁC (SCALE NGANG 100%) */}
@@ -1217,6 +1553,14 @@ export const ProjectView: React.FC<ProjectViewProps> = ({ onOpenLiveEvent }) => 
                       <Settings size={14} /> Thiết lập
                     </button>
                   )}
+                  <button
+                    className="btn-outline"
+                    style={{ borderColor: '#a855f7', color: '#7e22ce', background: 'rgba(168, 85, 247, 0.06)' }}
+                    onClick={() => setShowTemplateModal(true)}
+                    title="Nạp nhanh bộ checklist công việc chuẩn theo loại hình sự kiện"
+                  >
+                    <Sparkles size={14} /> Mẫu Công Việc
+                  </button>
                   <button className="btn-neon" onClick={() => openAddTaskModal(null)}>
                     <Plus size={14} /> Tạo Công Việc
                   </button>
@@ -1550,7 +1894,7 @@ export const ProjectView: React.FC<ProjectViewProps> = ({ onOpenLiveEvent }) => 
                       const hasDetails = !!(task.details && task.details.trim());
 
                       return (
-                        <div key={task.id} className="task-card glass-panel" onClick={() => setViewingTask(task)}>
+                        <div key={task.id} className="task-card glass-panel" onClick={() => handleViewTask(task)}>
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
                             <h4 className="task-card-title">{task.title}</h4>
                             <div style={{ display: 'flex', gap: 6, alignItems: 'center' }} onClick={e => e.stopPropagation()}>
@@ -1651,7 +1995,7 @@ export const ProjectView: React.FC<ProjectViewProps> = ({ onOpenLiveEvent }) => 
                                     {subTasks.map(st => (
                                       <div 
                                         key={st.id} 
-                                        onClick={() => setViewingTask(st)}
+                                        onClick={() => handleViewTask(st)}
                                         style={{ 
                                           display: 'flex', 
                                           alignItems: 'center', 
@@ -1757,9 +2101,20 @@ export const ProjectView: React.FC<ProjectViewProps> = ({ onOpenLiveEvent }) => 
           <div className="modal-body glass-panel">
             <h3 style={{ marginBottom: 20, color: 'var(--text-primary)' }}>Khởi tạo dự án mới</h3>
             <form onSubmit={handleAddProject}>
-              <div className="form-group">
-                <label>Tên dự án</label>
-                <input required type="text" placeholder="Ví dụ: Thiết kế Website Bán Hàng" value={newProjectName} onChange={e => setNewProjectName(e.target.value)} />
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Tên dự án</label>
+                  <input required type="text" placeholder="Ví dụ: Thiết kế Website Bán Hàng" value={newProjectName} onChange={e => setNewProjectName(e.target.value)} />
+                </div>
+                <div className="form-group">
+                  <label>Trạng thái dự án</label>
+                  <select value={newProjectStatus} onChange={e => setNewProjectStatus(e.target.value as any)}>
+                    <option value="Active">🟢 Đang chạy (Active)</option>
+                    <option value="Planning">📋 Đang lên kế hoạch (Planning)</option>
+                    <option value="OnHold">⏸️ Tạm hoãn (On Hold)</option>
+                    <option value="Completed">✅ Đã hoàn thành / Lưu trữ (Completed)</option>
+                  </select>
+                </div>
               </div>
               
               <div className="form-group">
@@ -1875,9 +2230,20 @@ export const ProjectView: React.FC<ProjectViewProps> = ({ onOpenLiveEvent }) => 
           <div className="modal-body glass-panel">
             <h3 style={{ marginBottom: 20, color: 'var(--text-primary)' }}>Thiết lập dự án</h3>
             <form onSubmit={handleEditProjectSubmit}>
-              <div className="form-group">
-                <label>Tên dự án</label>
-                <input required type="text" placeholder="Ví dụ: Thiết kế Website Bán Hàng" value={newProjectName} onChange={e => setNewProjectName(e.target.value)} />
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Tên dự án</label>
+                  <input required type="text" placeholder="Ví dụ: Thiết kế Website Bán Hàng" value={newProjectName} onChange={e => setNewProjectName(e.target.value)} />
+                </div>
+                <div className="form-group">
+                  <label>Trạng thái dự án</label>
+                  <select value={newProjectStatus} onChange={e => setNewProjectStatus(e.target.value as any)}>
+                    <option value="Active">🟢 Đang chạy (Active)</option>
+                    <option value="Planning">📋 Đang lên kế hoạch (Planning)</option>
+                    <option value="OnHold">⏸️ Tạm hoãn (On Hold)</option>
+                    <option value="Completed">✅ Đã hoàn thành / Lưu trữ (Completed)</option>
+                  </select>
+                </div>
               </div>
               
               <div className="form-group">
@@ -2530,6 +2896,109 @@ export const ProjectView: React.FC<ProjectViewProps> = ({ onOpenLiveEvent }) => 
               >
                 Đóng
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL NẠP BỘ MẪU CÔNG VIỆC SỰ KIỆN CHUẨN AGENCY */}
+      {showTemplateModal && activeProject && (
+        <div className="modal-overlay" onClick={() => !applyingTemplate && setShowTemplateModal(false)}>
+          <div className="modal-body glass-panel" style={{ maxWidth: 620, width: '92vw' }} onClick={e => e.stopPropagation()}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, borderBottom: '1px solid var(--border-color)', paddingBottom: 12 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <Sparkles size={20} color="#7e22ce" />
+                <div>
+                  <h3 style={{ margin: 0, fontSize: 17, color: 'var(--text-primary)' }}>
+                    Nạp Bộ Checklist Công Việc Mẫu — VBE Agency
+                  </h3>
+                  <p style={{ margin: '2px 0 0 0', fontSize: 12, color: 'var(--text-secondary)' }}>
+                    Tự động khởi tạo các đầu việc chuẩn và gán sẵn cho Phòng Sales & Account, Media, Kỹ thuật & Vận hành
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                className="btn-outline"
+                style={{ padding: '4px 10px' }}
+                onClick={() => setShowTemplateModal(false)}
+                disabled={applyingTemplate}
+              >
+                ✕
+              </button>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 16 }}>
+              {[
+                {
+                  key: 'product_launch',
+                  icon: '🚀',
+                  title: 'Sự kiện Ra mắt Sản phẩm (Product Launch)',
+                  count: '7 đầu việc chuẩn',
+                  desc: 'Hợp đồng & đề bài, Key Visual 2D/3D, Kịch bản MC, Mời KOL/Báo chí, Khảo sát AV/LED, In ấn POSM & Tổng duyệt.'
+                },
+                {
+                  key: 'livestream',
+                  icon: '🎥',
+                  title: 'Sản xuất Livestream / Webinar',
+                  count: '6 đầu việc chuẩn',
+                  desc: 'Kịch bản khung & Minigame, Overlay OBS/vMix, Setup đường truyền kép, Chốt Host/KOL, Test luồng & Highlight Recap.'
+                },
+                {
+                  key: 'activation',
+                  icon: '🎪',
+                  title: 'Booth Activation / Roadshow',
+                  count: '5 đầu việc chuẩn',
+                  desc: 'Xin giấy phép địa điểm, Thiết kế & sản xuất Booth/Standee, Tuyển PG/PB, Vận chuyển lắp đặt & Báo cáo hình ảnh.'
+                },
+                {
+                  key: 'gala_dinner',
+                  icon: '🥂',
+                  title: 'Gala Dinner / Year End Party',
+                  count: '6 đầu việc chuẩn',
+                  desc: 'Concept & Thực đơn nhà hàng, Video nhìn lại năm, Visual LED từng tiết mục, Thuê ca sĩ/vũ đoàn, Quà抽奖 & Điều phối.'
+                }
+              ].map(tpl => (
+                <div
+                  key={tpl.key}
+                  onClick={() => !applyingTemplate && handleApplyTaskTemplate(tpl.key)}
+                  style={{
+                    border: '1px solid #e2e8f0',
+                    borderRadius: 10,
+                    padding: 14,
+                    background: '#f8fafc',
+                    cursor: applyingTemplate ? 'wait' : 'pointer',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    justifyContent: 'space-between',
+                    gap: 8,
+                    transition: 'all 0.2s ease'
+                  }}
+                >
+                  <div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                      <span style={{ fontSize: 22 }}>{tpl.icon}</span>
+                      <span style={{ fontSize: 11, fontWeight: 700, background: '#f3e8ff', color: '#7e22ce', padding: '2px 8px', borderRadius: 999 }}>
+                        {tpl.count}
+                      </span>
+                    </div>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: '#0f172a', marginBottom: 4 }}>
+                      {tpl.title}
+                    </div>
+                    <div style={{ fontSize: 12, color: '#64748b', lineHeight: 1.5 }}>
+                      {tpl.desc}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    className="btn-neon"
+                    disabled={applyingTemplate}
+                    style={{ width: '100%', padding: '7px 12px', fontSize: 12, marginTop: 4 }}
+                  >
+                    {applyingTemplate ? 'Đang tạo công việc...' : '✨ Áp dụng mẫu này'}
+                  </button>
+                </div>
+              ))}
             </div>
           </div>
         </div>
